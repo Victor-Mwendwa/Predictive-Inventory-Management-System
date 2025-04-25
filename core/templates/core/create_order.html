@@ -1,0 +1,16 @@
+{% extends 'core/base.html' %}
+{% block title %}Create Order{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Create New Order</h2>
+    <form method="post" class="mt-3">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-save"></i> Submit Order
+        </button>
+        <a href="{% url 'order_list' %}" class="btn btn-secondary">Cancel</a>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,37 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}Forecast Report{% endblock %}
+{% block page_title %}Forecast Report{% endblock %}
+{% block page_subtitle %}Overview of Predicted Product Demand{% endblock %}
+
+{% block content %}
+<div class="table-responsive">
+    <table class="table table-hover table-bordered align-middle">
+        <thead class="table-light">
+            <tr>
+                <th>Product</th>
+                <th>Retailer</th>
+                <th>Forecast Date</th>
+                <th>Predicted Demand</th>
+                <th>Confidence Level</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for forecast in forecasts %}
+            <tr>
+                <td>{{ forecast.product.name }}</td>
+                <td>{{ forecast.retailer.name }}</td>
+                <td>{{ forecast.forecast_date|date:"M d, Y" }}</td>
+                <td>{{ forecast.predicted_demand }}</td>
+                <td>{{ forecast.confidence_level }}%</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5" class="text-center">No forecast data available.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
