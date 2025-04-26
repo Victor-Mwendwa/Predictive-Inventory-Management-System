@@ -1,0 +1,180 @@
+{% extends "core/base.html" %}
+
+{% block title %}Sales Report{% endblock %}
+
+{% block page_title %}Sales Report{% endblock %}
+{% block page_subtitle %}{{ start_date }} to {{ end_date }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+  <div class="col">
+    <form method="post" class="row g-2 align-items-end">
+      {% csrf_token %}
+      <div class="col-auto">
+        <label class="form-label">Start Date</label>
+        <input type="date" name="start_date" class="form-control" value="{{ start_date }}">
+      </div>
+      <div class="col-auto">
+        <label class="form-label">End Date</label>
+        <input type="date" name="end_date" class="form-control" value="{{ end_date }}">
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-funnel-fill"></i> Filter
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="row mb-4">
+<!-- Total Sales -->
+<div class="col-md-3">
+    <div class="card text-white bg-success h-100">
+      <div class="card-body">
+        <h5 class="card-title">30-Day Sales</h5>
+        <p class="card-text display-6">
+          KSh {{ total_revenue|floatformat:2 }}
+        </p>
+      </div>
+    </div>
+  </div>
+
+<!-- Total Quantity -->
+<div class="col-md-3">
+    <div class="card text-white bg-info h-100">
+      <div class="card-body">
+        <h5 class="card-title">Total Items Sold</h5>
+        <p class="card-text display-6">
+          {{ total_quantity }}
+        </p>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Top Products Count -->
+  <div class="col-md-3">
+    <div class="card text-white bg-warning h-100">
+      <div class="card-body">
+        <h5 class="card-title">Top Products</h5>
+        <p class="card-text display-6">
+          {{ top_products|length }}
+        </p>
+      </div>
+    </div>
+  </div>
+  <!-- Number of Products Sold -->
+  <div class="col-md-3">
+    <div class="card text-white bg-secondary h-100">
+      <div class="card-body">
+        <h5 class="card-title">Distinct Products</h5>
+        <p class="card-text display-6">
+          {{ sales_data|length }}
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row mb-5">
+  <div class="col-lg-6">
+    <h4>Top 5 Products by Quantity</h4>
+    <table class="table table-striped">
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th>Category</th>
+          <th>Qty Sold</th>
+          <th>Revenue (KSh)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in top_products %}
+        <tr>
+          <td>{{ item.product__name }}</td>
+          <td>{{ item.product__category__name }}</td>
+          <td>{{ item.total_quantity }}</td>
+          <td>{{ item.total_revenue|floatformat:2 }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" class="text-center">No sales in this period.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col-lg-6">
+    <h4>Sales Trend (Daily Total)</h4>
+    <canvas id="dailySalesChart" style="max-height:300px;"></canvas>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col">
+    <h4>All Products Sales</h4>
+    <table class="table table-hover table-bordered">
+      <thead class="table-light">
+        <tr>
+          <th>Product</th>
+          <th>Category</th>
+          <th>Total Qty</th>
+          <th>Total Revenue (KSh)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in sales_data %}
+        <tr>
+          <td>{{ row.product__name }}</td>
+          <td>{{ row.product__category__name }}</td>
+          <td>{{ row.total_quantity }}</td>
+          <td>{{ row.total_revenue|floatformat:2 }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" class="text-center">No data available.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Prepare data for Chart.js
+  const labels = [
+    {% for entry in daily_sales %}
+      "{{ entry.order__order_date__date }}",
+    {% endfor %}
+  ];
+  const data = [
+    {% for entry in daily_sales %}
+      {{ entry.daily_total|floatformat:2 }},
+    {% endfor %}
+  ];
+
+  const ctx = document.getElementById('dailySalesChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Daily Revenue (KSh)',
+        data: data,
+        fill: true,
+        tension: 0.3
+      }]
+    },
+    options: {
+      scales: {
+        x: {
+          title: { display: true, text: 'Date' }
+        },
+        y: {
+          title: { display: true, text: 'Revenue (KSh)' },
+          beginAtZero: true
+        }
+      }
+    }
+  });
+</script>
+{% endblock %}

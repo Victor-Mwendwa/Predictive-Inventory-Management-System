@@ -1,0 +1,11 @@
+{% extends "core/base.html" %}
+{% block content %}
+<h2>Out of Stock Items</h2>
+<ul>
+    {% for item in items %}
+        <li>{{ item.product.name }} - {{ item.current_stock }}</li>
+    {% empty %}
+        <li>No out-of-stock items</li>
+    {% endfor %}
+</ul>
+{% endblock %}

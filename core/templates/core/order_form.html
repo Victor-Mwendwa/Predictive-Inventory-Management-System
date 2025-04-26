@@ -1,0 +1,15 @@
+{% extends 'core/base.html' %}
+{% block title %}New Order{% endblock %}
+{% block page_title %}Create Order{% endblock %}
+{% block content %}
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  {{ formset.management_form }}
+  {% for subform in formset %}
+    {{ subform.as_p }}
+  {% endfor %}
+  <button class="btn btn-primary">Submit Order</button>
+  <a href="{% url 'core:order_list' %}" class="btn btn-secondary">Cancel</a>
+</form>
+{% endblock %}

@@ -110,3 +110,22 @@ LOGOUT_REDIRECT_URL = 'login'
 # Create data directory if it doesn't exist
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 os.makedirs(DATA_DIR, exist_ok=True)
+
+# Redirect users here if they try to hit a login_required view
+LOGIN_URL = '/login/'
+
+# After successful login send them here
+LOGIN_REDIRECT_URL = '/'
+
+# After logout send them here
+LOGOUT_REDIRECT_URL = '/login/'
+
+STATIC_URL = '/static/'
+
+# Tell Django where your “source” static files live:
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',      # if you have e.g. PROJECT_ROOT/static/css/…
+]
+
+# Tell Django where to “collect” them for deployment/serving:
+STATIC_ROOT = BASE_DIR / 'staticfiles'

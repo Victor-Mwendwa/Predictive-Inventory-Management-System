@@ -9,11 +9,11 @@ from django.utils import timezone
 from django.http import JsonResponse
 from datetime import timedelta
 from django.shortcuts import render
-# core/views.py
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import HttpResponse
 from django.views.generic import ListView
-from .models import Inventory  # make sure the model name is correct
+from .models import Inventory  
+from .models import OrderItem, Order, Inventory, Product, Retailer, DemandForecast
 
 from .models import (
     Product, Inventory, Order, OrderItem, 
@@ -27,17 +27,132 @@ from .forms import (
 from .utils.ml_model import DemandForecaster
 import json
 from django.shortcuts import render
+from .models import Retailer
 from django.shortcuts import render
 from core.models import DemandForecast
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from .forms import OrderForm
-from .models import Order, Retailer  # Adjust if your model names differ
+from .models import Order, Retailer  
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from .forms import ProductForm
+from django.utils import timezone
+from datetime import timedelta
+
+@login_required
+def dashboard(request):
+    period = request.GET.get('period', 'today')
+    now = timezone.now()
+
+    if period == 'week':
+        start_date = now - timedelta(days=7)
+    elif period == 'month':
+        start_date = now - timedelta(days=30)
+    else:
+        start_date = now - timedelta(days=1)
+
+    recent_orders = Order.objects.filter(created_at__gte=start_date)
+    low_stock_count = Inventory.objects.filter(current_stock__lt=F('reorder_point')).count()
+    out_of_stock_count = Inventory.objects.filter(current_stock=0).count()
+    outdated_forecasts = DemandForecast.objects.filter(last_updated__lte=now - timedelta(days=7)).count()
+
+    context = {
+        'recent_orders': recent_orders,
+        'low_stock_count': low_stock_count,
+        'out_of_stock_count': out_of_stock_count,
+        'outdated_forecasts': outdated_forecasts,
+        'selected_period': period,
+    }
+    return render(request, 'dashboard.html', context)
+
+@login_required
+def dashboard(request):
+    now = timezone.now()
+    period = request.GET.get('period', 'today')
+    # Period filtering
+    if period == 'week':
+        since = now - timedelta(days=7)
+    elif period == 'month':
+        since = now - timedelta(days=30)
+    else:
+        since = now - timedelta(days=1)
+
+    # Recent Orders
+    recent_orders = Order.objects.filter(order_date__gte=since).order_by('-order_date')[:5]
+
+    # Top Selling Products (last 30 days)
+    top_products = (
+        OrderItem.objects
+        .filter(order__order_date__gte=now - timedelta(days=30))
+        .values('product__name')
+        .annotate(total_qty=Sum('quantity'))
+        .order_by('-total_qty')[:5]
+    )
+
+    # Counts & sums
+    total_products    = Product.objects.count()
+    active_retailers  = Retailer.objects.filter(is_active=True).count()
+    low_stock_count   = Inventory.objects.filter(current_stock__lt=F('reorder_point')).count()
+    out_of_stock_count= Inventory.objects.filter(current_stock=0).count()
+    outdated_fc_count = DemandForecast.objects.filter(
+                            created_at__lte=now - timedelta(days=7)
+                        ).count()
+
+    # 30-day sales (revenue)
+    sales_30d = (
+      OrderItem.objects
+      .filter(order__order_date__gte=now - timedelta(days=30))
+      .aggregate(total=Sum(F('quantity')*F('unit_price')))['total'] or 0
+    )
+
+    # Inventory value
+    inventory_value = (
+      Inventory.objects
+      .aggregate(value=Sum(F('current_stock')*F('product__price')))['value'] or 0
+    )
+
+    # Sales Trend (labels + data for last 30 days)
+    daily = (
+      OrderItem.objects
+      .filter(order__order_date__date__gte=now.date() - timedelta(days=30))
+      .values('order__order_date__date')
+      .annotate(day_total=Sum(F('quantity')*F('unit_price')))
+      .order_by('order__order_date__date')
+    )
+    labels = [entry['order__order_date__date'].strftime('%b %d') for entry in daily]
+    data   = [entry['day_total'] for entry in daily]
+
+    # Quick Actions (just links)
+    quick_actions = [
+      {'url': 'order_create',   'label': 'New Order',   'icon': 'bi-cart-plus'},
+      {'url': 'product_create', 'label': 'New Product', 'icon': 'bi-box-seam'},
+      {'url': 'low_stock',      'label': 'Low Stock',   'icon': 'bi-exclamation-triangle'},
+      {'url': 'out_of_stock',   'label': 'Out of Stock','icon': 'bi-slash-circle'},
+    ]
+
+    return render(request, 'core/dashboard.html', {
+        'selected_period':    period,
+        'recent_orders':      recent_orders,
+        'top_products':       top_products,
+        'total_products':     total_products,
+        'active_retailers':   active_retailers,
+        'low_stock_count':    low_stock_count,
+        'out_of_stock_count': out_of_stock_count,
+        'outdated_forecasts': outdated_fc_count,
+        'sales_30d':          sales_30d,
+        'inventory_value':    inventory_value,
+        'sales_trend_labels': labels,
+        'sales_trend_data':   data,
+        'quick_actions':      quick_actions,
+    })
+
+@login_required
+def out_of_stock(request):
+    items = Inventory.objects.filter(current_stock=0)
+    return render(request, 'core/out_of_stock.html', {'items': items})
 
 @login_required
 def product_create(request):
@@ -73,10 +188,60 @@ def order_create(request):
     return render(request, 'core/create_order.html', {'form': form})
 
 def forecast_report(request):
-    return render(request, 'core/forecast_report.html', {})
+    from django.utils import timezone
+    from datetime import timedelta
+
+    outdated = DemandForecast.objects.filter(last_updated__lt=timezone.now() - timedelta(days=7))
+    return render(request, 'core/forecast_report.html', {'forecasts': outdated})
+
+# core/views.py
+from django.shortcuts import render
+from django.db.models import Sum
+from .models import OrderItem
 
 def sales_report(request):
-    return render(request, 'reports/sales_report.html')
+    # Handle dates 
+    start_date = request.POST.get('start_date')
+    end_date = request.POST.get('end_date')
+
+    # Filter order items in the date range
+    filters = {}
+    if start_date:
+        filters['order__order_date__gte'] = start_date
+    if end_date:
+        filters['order__order_date__lte'] = end_date
+
+    sales_data = OrderItem.objects.filter(**filters).values(
+        'product__name',
+        'product__category__name'
+    ).annotate(
+        total_quantity=Sum('quantity'),
+        total_revenue=Sum('total_price')
+    ).order_by('-total_revenue')
+
+    top_products = sales_data[:5]
+
+    # Daily sales for chart
+    daily_sales = (
+        OrderItem.objects.filter(**filters)
+        .values('order__order_date__date')
+        .annotate(daily_total=Sum('total_price'))
+        .order_by('order__order_date__date')
+    )
+
+    # Compute totals
+    total_revenue = sum(item['total_revenue'] for item in sales_data)
+    total_quantity = sum(item['total_quantity'] for item in sales_data)
+
+    return render(request, 'sales_report.html', {
+        'sales_data': sales_data,
+        'top_products': top_products,
+        'daily_sales': daily_sales,
+        'total_revenue': total_revenue,
+        'total_quantity': total_quantity,
+        'start_date': start_date,
+        'end_date': end_date,
+    })
 
 def reports(request):
     return render(request, 'core/reports.html')
@@ -87,9 +252,14 @@ def profile(request):
 def profile(request):
     return render(request, 'core/base.html')
 
+@login_required
 def dashboard(request):
-    return render(request, 'dashboard.html')
-
+    low_stock_count = Inventory.objects.filter(current_stock__lte=F('reorder_point')).count()
+    outdated_forecasts = DemandForecast.objects.filter(forecast_date__lt=timezone.now().date()).count()
+    return render(request, 'dashboard.html', {
+      'low_stock_count': low_stock_count,
+      'outdated_forecasts': outdated_forecasts,
+    })   
 class DashboardView(LoginRequiredMixin, ListView):
     template_name = 'core/dashboard.html'
     context_object_name = 'alerts'
@@ -392,7 +562,10 @@ def forecast_detail(request, pk):
         'product': forecast.product,
     })
 
-
+@login_required
+def retailer_list(request):
+    retailers = Retailer.objects.all()
+    return render(request, 'core/retailer_list.html', {'retailers': retailers})
 class RetailerListView(LoginRequiredMixin, ListView):
     model = Retailer
     template_name = 'core/retailer_list.html'
@@ -525,7 +698,7 @@ def inventory_report(request):
     
     aging_inventory = inventory_status.exclude(product_id__in=active_products)
     
-    return render(request, 'core/inventory_report.html', {
+    return render(request, 'core:inventory_report', {
         'inventory_status': inventory_status,
         'total_value': total_value,
         'aging_inventory': aging_inventory,

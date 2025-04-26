@@ -1,0 +1,40 @@
+{% extends 'core/base.html' %}
+{% block title %}Retailers{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h2>Retailers</h2>
+    <a href="#" class="btn btn-primary mb-3 disabled">Add Retailer (Coming Soon)</a>
+
+    <table class="table table-bordered table-hover">
+        <thead class="table-light">
+            <tr>
+                <th>Name</th>
+                <th>Location</th>
+                <th>Contact</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for retailer in retailers %}
+            <tr>
+                <td>{{ retailer.name }}</td>
+                <td>{{ retailer.location }}</td>
+                <td>{{ retailer.contact }}</td>
+                <td>
+                    {% if retailer.is_active %}
+                        <span class="badge bg-success">Active</span>
+                    {% else %}
+                        <span class="badge bg-secondary">Inactive</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="4" class="text-center">No retailers found.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

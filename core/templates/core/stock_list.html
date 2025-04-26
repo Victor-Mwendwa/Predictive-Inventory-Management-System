@@ -1,0 +1,40 @@
+{% extends 'core/base.html' %}
+{% block title %}Stock Status - Kyosk{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h2>Stock Status</h2>
+    <table class="table table-bordered table-hover mt-3">
+        <thead class="table-light">
+            <tr>
+                <th>Product</th>
+                <th>Category</th>
+                <th>Current Stock</th>
+                <th>Reorder Point</th>
+                <th>Needs Restock</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in inventory %}
+            <tr class="{% if item.current_stock == 0 %}table-danger{% elif item.current_stock <= item.reorder_point %}table-warning{% endif %}">
+                <td>{{ item.product.name }}</td>
+                <td>{{ item.product.category }}</td>
+                <td>{{ item.current_stock }}</td>
+                <td>{{ item.reorder_point }}</td>
+                <td>
+                    {% if item.current_stock <= item.reorder_point %}
+                        <span class="badge bg-danger">Yes</span>
+                    {% else %}
+                        <span class="badge bg-success">No</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5" class="text-center">No inventory records found.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

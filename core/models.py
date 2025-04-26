@@ -84,6 +84,11 @@ class Product(models.Model):
 class Retailer(models.Model):
     """Retailer model representing store owners"""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='retailer')
+    name = models.CharField(
+        max_length=255,
+        blank=True,           # allow empty strings
+        default='',           # default for existing rows
+    )
     location = models.CharField(max_length=255)
     storage_capacity = models.DecimalField(
         max_digits=10, 
