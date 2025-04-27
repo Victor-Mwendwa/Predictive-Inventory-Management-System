@@ -6,6 +6,7 @@ from django.utils import timezone
 from datetime import timedelta
 import uuid
 
+
 class ProductCategory(models.Model):
     """Category for grouping products"""
     name = models.CharField(max_length=100, unique=True)
@@ -20,6 +21,32 @@ class ProductCategory(models.Model):
     def __str__(self):
         return self.name
 
+#class Product(models.Model):
+#  name = models.CharField(max_length=255)
+#   category = models.ForeignKey('Category', on_delete=models.CASCADE)
+#   price = models.FloatField()
+
+#def __str__(self):
+#return self.name
+
+class Forecast(models.Model):
+    product = models.ForeignKey('Product', on_delete=models.CASCADE)
+    forecast_date = models.DateField()
+    predicted_demand = models.IntegerField()
+    confidence_score = models.FloatField()
+    algorithm_version = models.CharField(max_length=50)
+    created_at = models.DateTimeField(auto_now_add=True)
+    # If you're referencing `last_updated`, add this field:
+    last_updated = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.product.name} - {self.forecast_date}"
+
+class Category(models.Model):
+    name = models.CharField(max_length=255)
+
+    def __str__(self):
+        return self.name
 
 class Product(models.Model):
     """Product model representing items in inventory"""

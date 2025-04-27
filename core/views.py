@@ -191,7 +191,7 @@ def forecast_report(request):
     from django.utils import timezone
     from datetime import timedelta
 
-    outdated = DemandForecast.objects.filter(last_updated__lt=timezone.now() - timedelta(days=7))
+    outdated = DemandForecast.objects.filter(created_at__lt=timezone.now() - timedelta(days=7))
     return render(request, 'core/forecast_report.html', {'forecasts': outdated})
 
 # core/views.py
@@ -698,7 +698,7 @@ def inventory_report(request):
     
     aging_inventory = inventory_status.exclude(product_id__in=active_products)
     
-    return render(request, 'core:inventory_report', {
+    return render(request, 'core/inventory_report.html', {
         'inventory_status': inventory_status,
         'total_value': total_value,
         'aging_inventory': aging_inventory,
