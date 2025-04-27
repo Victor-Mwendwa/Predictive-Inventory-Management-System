@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from celery.schedules import crontab
+from pymongo import MongoClient
 
 CELERY_BEAT_SCHEDULE = {
     'daily-maintenance': {
@@ -64,12 +65,41 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
+# MongoDB Settings
+# MONGO_URI = 'mongodb://localhost:27017/'
+# MONGO_DB_NAME = 'kyoskdata'
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'djongo',
+#         'NAME': 'kyoskdata',
+#         'CLIENT': {
+#             'host': 'mongodb+srv://viktormwendwan:92yQv8ufd5oVCOrK@cluster0.kipgroq.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',
+#             'username': 'viktormwendwan',
+#             'password': '92yQv8ufd5oVCOrK',
+#         }
+#     }
+# }
+
 DATABASES = {
     'default': {
-        'ENGINE': 'djongo',
-        'NAME': BASE_DIR / 'data' / 'inventory.db',
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',  # Django's own tables go here: users, sessions, admin...
     }
 }
+
+# MongoDB Settings
+# MongoDB Settings
+MONGO_USERNAME = 'root'
+MONGO_PASSWORD = 'example'
+MONGO_HOST = 'localhost'  # or your cluster URL
+MONGO_PORT = 27017        # usually 27017 locally
+
+MONGO_DB_NAME = 'kyoskdata'
+
+# Build the full URI
+MONGO_URI = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
+
+
 
 AUTH_PASSWORD_VALIDATORS = [
     {

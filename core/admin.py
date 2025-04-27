@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.contrib import messages
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import User
 from django.utils.html import format_html
@@ -165,22 +166,30 @@ class InventoryAdmin(admin.ModelAdmin):
         return obj.days_of_supply
     days_of_supply.short_description = 'Days of Supply'
 
-    @admin.action(description='Generate restock orders for selected')
-    def generate_restock_orders(self, request, queryset):
+def generate_restock_orders(self, request, queryset):
         for inventory in queryset:
             if inventory.current_stock < inventory.reorder_point:
                 suggested_qty = max(
                     inventory.reorder_point + inventory.safety_stock - inventory.current_stock,
                     inventory.safety_stock
                 )
+                # Send a message to the admin about the suggested restocking
                 self.message_user(
                     request,
                     f"Suggested to restock {inventory.product.name} with {suggested_qty} units",
-                    level='INFO'
+                    level=messages.INFO
                 )
 
+        # Return a success message after the action is completed
+        self.message_user(
+            request,
+            "Restock order suggestions have been generated for selected items.",
+            level=messages.SUCCESS
+        )
 
-@admin.register(Order)
+    # Add the action to the list of actions available for the admin interface
+        actions = ['generate_restock_orders']
+
 class OrderAdmin(admin.ModelAdmin):
     list_display = [
         'reference', 'retailer', 'order_date',
@@ -189,9 +198,9 @@ class OrderAdmin(admin.ModelAdmin):
     list_filter = ['status', 'order_date']
     search_fields = ['reference', 'retailer__user__username']
     list_select_related = ['retailer__user']
-    inlines = [OrderItemInline]
+    inlines = [OrderItemInline]  # Ensure OrderItemInline is defined somewhere
     date_hierarchy = 'order_date'
-    actions = ['mark_as_processing', 'mark_as_shipped']
+    actions = ['mark_as_processing', 'mark_as_shipped']  # Register actions here
     readonly_fields = ['total_amount']
 
     def total_amount(self, obj):
@@ -202,26 +211,27 @@ class OrderAdmin(admin.ModelAdmin):
         return obj.items.count()
     item_count.short_description = 'Items'
 
-    @admin.action(description='Mark selected orders as Processing')
+    # Action to mark selected orders as 'PROCESSING'
     def mark_as_processing(self, request, queryset):
         updated = queryset.filter(status='PENDING').update(status='PROCESSING')
         self.message_user(
             request,
             f"{updated} orders marked as Processing",
-            level='SUCCESS'
+            level=messages.SUCCESS
         )
 
-    @admin.action(description='Mark selected orders as Shipped')
+    # Action to mark selected orders as 'SHIPPED'
     def mark_as_shipped(self, request, queryset):
         updated = queryset.filter(status='PROCESSING').update(status='SHIPPED')
         self.message_user(
             request,
             f"{updated} orders marked as Shipped",
-            level='SUCCESS'
+            level=messages.SUCCESS
         )
 
+# Register the Order model with the custom admin
 
-@admin.register(OrderItem)
+
 class OrderItemAdmin(admin.ModelAdmin):
     list_display = ['order_link', 'product_link', 'quantity', 'unit_price', 'subtotal']
     list_select_related = ['order', 'product']
@@ -241,8 +251,6 @@ class OrderItemAdmin(admin.ModelAdmin):
         return obj.subtotal
     subtotal.short_description = 'Subtotal'
 
-
-@admin.register(DemandForecast)
 class DemandForecastAdmin(admin.ModelAdmin):
     list_display = [
         'product', 'forecast_date', 'predicted_demand',
@@ -297,7 +305,6 @@ class RetailerAdmin(admin.ModelAdmin):
         return obj.orders.count()
     order_count.short_description = 'Orders'
 
-    @admin.action(description='Activate selected retailers')
     def activate_retailers(self, request, queryset):
         updated = queryset.update(is_active=True)
         self.message_user(
@@ -305,8 +312,8 @@ class RetailerAdmin(admin.ModelAdmin):
             f"{updated} retailers activated",
             level='SUCCESS'
         )
+    activate_retailers.short_description = 'Activate selected retailers'
 
-    @admin.action(description='Deactivate selected retailers')
     def deactivate_retailers(self, request, queryset):
         updated = queryset.update(is_active=False)
         self.message_user(
@@ -314,7 +321,11 @@ class RetailerAdmin(admin.ModelAdmin):
             f"{updated} retailers deactivated",
             level='SUCCESS'
         )
+    deactivate_retailers.short_description = 'Deactivate selected retailers'
 
+from django.contrib import admin
+from django.utils.html import format_html
+from .models import InventoryAudit  # Adjust according to your import
 
 @admin.register(InventoryAudit)
 class InventoryAuditAdmin(admin.ModelAdmin):
@@ -346,6 +357,7 @@ class InventoryAuditAdmin(admin.ModelAdmin):
     quantity_change.short_description = 'Change'
 
 
+
 # Unregister the default User admin and register our custom one
 admin.site.unregister(User)
 admin.site.register(User, CustomUserAdmin)
@@ -354,3 +366,9 @@ admin.site.register(User, CustomUserAdmin)
 admin.site.site_header = "Kyosk Inventory Administration"
 admin.site.site_title = "Kyosk Inventory Admin"
 admin.site.index_title = "Inventory Management"
+admin.site.register(Order, OrderAdmin)
+admin.site.register(OrderItem, OrderItemAdmin)
+admin.site.register(DemandForecast, DemandForecastAdmin)
+
+
+

@@ -14,6 +14,10 @@ from django.http import HttpResponse
 from django.views.generic import ListView
 from .models import Inventory  
 from .models import OrderItem, Order, Inventory, Product, Retailer, DemandForecast
+from django.http import JsonResponse
+from django.conf import settings
+from .db import db 
+
 
 from .models import (
     Product, Inventory, Order, OrderItem, 
@@ -41,114 +45,143 @@ from django.contrib import messages
 from .forms import ProductForm
 from django.utils import timezone
 from datetime import timedelta
+from .db import db
+
+def my_view(request):
+    collection = db['salesorders']
+    data = list(collection.find({}))  # Fetch all documents
+    for item in data:
+        item['_id'] = str(item['_id'])  # Convert ObjectId to string
+    return JsonResponse(data, safe=False)
 
 @login_required
 def dashboard(request):
     period = request.GET.get('period', 'today')
     now = timezone.now()
 
+    # Determine start date based on period
     if period == 'week':
         start_date = now - timedelta(days=7)
     elif period == 'month':
         start_date = now - timedelta(days=30)
-    else:
+    else:  # today
         start_date = now - timedelta(days=1)
 
-    recent_orders = Order.objects.filter(created_at__gte=start_date)
-    low_stock_count = Inventory.objects.filter(current_stock__lt=F('reorder_point')).count()
-    out_of_stock_count = Inventory.objects.filter(current_stock=0).count()
-    outdated_forecasts = DemandForecast.objects.filter(last_updated__lte=now - timedelta(days=7)).count()
-
-    context = {
-        'recent_orders': recent_orders,
-        'low_stock_count': low_stock_count,
-        'out_of_stock_count': out_of_stock_count,
-        'outdated_forecasts': outdated_forecasts,
-        'selected_period': period,
-    }
-    return render(request, 'core/dashboard.html', context)
-
-@login_required
-def dashboard(request):
-    now = timezone.now()
-    period = request.GET.get('period', 'today')
-    # Period filtering
-    if period == 'week':
-        since = now - timedelta(days=7)
-    elif period == 'month':
-        since = now - timedelta(days=30)
-    else:
-        since = now - timedelta(days=1)
-
-    # Recent Orders
-    recent_orders = Order.objects.filter(order_date__gte=since).order_by('-order_date')[:5]
+    # Recent Orders (last 5)
+    recent_orders_pipeline = [
+        {"$addFields": {
+            "createdDate": {"$dateFromString": {
+                "dateString": {"$substrCP": ["$createdDate", 0, 23]},
+                "format": "%Y-%m-%d %H:%M:%S.%L"
+            }}
+        }},
+        {"$match": {"createdDate": {"$gte": start_date}}},
+        {"$sort": {"createdDate": -1}},
+        {"$limit": 5},
+        {"$project": {
+            "_id": 0,
+            "id": 1,
+            "name": 1,
+            "retailerName": 1,
+            "outletName": 1,
+            "totalAmount": 1,
+            "createdDate": 1
+        }}
+    ]
+    recent_orders = list(db.saleorders.aggregate(recent_orders_pipeline))
 
     # Top Selling Products (last 30 days)
-    top_products = (
-        OrderItem.objects
-        .filter(order__order_date__gte=now - timedelta(days=30))
-        .values('product__name')
-        .annotate(total_qty=Sum('quantity'))
-        .order_by('-total_qty')[:5]
-    )
-
-    # Counts & sums
-    total_products    = Product.objects.count()
-    active_retailers  = Retailer.objects.filter(is_active=True).count()
-    low_stock_count   = Inventory.objects.filter(current_stock__lt=F('reorder_point')).count()
-    out_of_stock_count= Inventory.objects.filter(current_stock=0).count()
-    outdated_fc_count = DemandForecast.objects.filter(
-                            created_at__lte=now - timedelta(days=7)
-                        ).count()
-
-    # 30-day sales (revenue)
-    sales_30d = (
-      OrderItem.objects
-      .filter(order__order_date__gte=now - timedelta(days=30))
-      .aggregate(total=Sum(F('quantity')*F('unit_price')))['total'] or 0
-    )
-
-    # Inventory value
-    inventory_value = (
-      Inventory.objects
-      .aggregate(value=Sum(F('current_stock')*F('product__price')))['value'] or 0
-    )
-
-    # Sales Trend (labels + data for last 30 days)
-    daily = (
-      OrderItem.objects
-      .filter(order__order_date__date__gte=now.date() - timedelta(days=30))
-      .values('order__order_date__date')
-      .annotate(day_total=Sum(F('quantity')*F('unit_price')))
-      .order_by('order__order_date__date')
-    )
-    labels = [entry['order__order_date__date'].strftime('%b %d') for entry in daily]
-    data   = [entry['day_total'] for entry in daily]
-
-    # Quick Actions (just links)
-    quick_actions = [
-      {'url': 'order_create',   'label': 'New Order',   'icon': 'bi-cart-plus'},
-      {'url': 'product_create', 'label': 'New Product', 'icon': 'bi-box-seam'},
-      {'url': 'low_stock',      'label': 'Low Stock',   'icon': 'bi-exclamation-triangle'},
-      {'url': 'out_of_stock',   'label': 'Out of Stock','icon': 'bi-slash-circle'},
+    top_products_pipeline = [
+        {"$addFields": {
+            "createdDate": {"$dateFromString": {
+                "dateString": {"$substrCP": ["$createdDate", 0, 23]},
+                "format": "%Y-%m-%d %H:%M:%S.%L"
+            }}
+        }},
+        {"$match": {"createdDate": {"$gte": now - timedelta(days=30)}}},
+        {"$unwind": "$items"},
+        {"$group": {
+            "_id": "$items.catalogItemId",
+            "name": {"$first": "$items.productBundleId"},
+            "total_qty": {"$sum": "$items.catalogItemQty"}
+        }},
+        {"$sort": {"total_qty": -1}},
+        {"$limit": 5},
+        {"$project": {
+            "product__name": "$name",
+            "total_qty": 1,
+            "_id": 0
+        }}
     ]
+    top_products = list(db.saleorders.aggregate(top_products_pipeline))
 
-    return render(request, 'core/dashboard.html', {
-        'selected_period':    period,
-        'recent_orders':      recent_orders,
-        'top_products':       top_products,
-        'total_products':     total_products,
-        'active_retailers':   active_retailers,
-        'low_stock_count':    low_stock_count,
-        'out_of_stock_count': out_of_stock_count,
-        'outdated_forecasts': outdated_fc_count,
-        'sales_30d':          sales_30d,
-        'inventory_value':    inventory_value,
+    # Total Products (distinct catalog items)
+    total_products = len(db.saleorders.distinct("items.catalogItemId"))
+
+    # Active Retailers
+    active_retailers = db.retailers.count_documents({"active": True})
+
+    # 30-day Sales Revenue
+    sales_30d_pipeline = [
+        {"$addFields": {
+            "createdDate": {"$dateFromString": {
+                "dateString": {"$substrCP": ["$createdDate", 0, 23]},
+                "format": "%Y-%m-%d %H:%M:%S.%L"
+            }}
+        }},
+        {"$match": {"createdDate": {"$gte": now - timedelta(days=30)}}},
+        {"$unwind": "$items"},
+        {"$group": {
+            "_id": None,
+            "total": {"$sum": {"$multiply": ["$items.catalogItemQty", "$items.sellingPrice"]}}
+        }}
+    ]
+    sales_30d = db.saleorders.aggregate(sales_30d_pipeline).next().get('total', 0) \
+        if db.saleorders.aggregate(sales_30d_pipeline).alive else 0
+
+    # Sales Trend Data (last 30 days)
+    sales_trend_pipeline = [
+        {"$addFields": {
+            "createdDate": {"$dateFromString": {
+                "dateString": {"$substrCP": ["$createdDate", 0, 23]},
+                "format": "%Y-%m-%d %H:%M:%S.%L"
+            }}
+        }},
+        {"$match": {"createdDate": {"$gte": now - timedelta(days=30)}}},
+        {"$unwind": "$items"},
+        {"$group": {
+            "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$createdDate"}},
+            "total": {"$sum": {"$multiply": ["$items.catalogItemQty", "$items.sellingPrice"]}}
+        }},
+        {"$sort": {"_id": 1}}
+    ]
+    daily_sales = list(db.saleorders.aggregate(sales_trend_pipeline))
+    labels = [datetime.strptime(day['_id'], "%Y-%m-%d").strftime("%b %d") for day in daily_sales]
+    data = [day['total'] for day in daily_sales]
+
+    context = {
+        'selected_period': period,
+        'recent_orders': recent_orders,
+        'top_products': top_products,
+        'total_products': total_products,
+        'active_retailers': active_retailers,
+        'sales_30d': sales_30d,
         'sales_trend_labels': labels,
-        'sales_trend_data':   data,
-        'quick_actions':      quick_actions,
-    })
-    
+        'sales_trend_data': data,
+        'quick_actions': [
+            {'url': 'order_create', 'label': 'New Order', 'icon': 'bi-cart-plus'},
+            {'url': 'product_create', 'label': 'New Product', 'icon': 'bi-box-seam'},
+            {'url': 'low_stock', 'label': 'Low Stock', 'icon': 'bi-exclamation-triangle'},
+            {'url': 'out_of_stock', 'label': 'Out of Stock', 'icon': 'bi-slash-circle'},
+        ],
+        # Placeholder values for unavailable metrics
+        'low_stock_count': 0,
+        'out_of_stock_count': 0,
+        'outdated_forecasts': 0,
+        'inventory_value': 0,
+    }
+    return render(request, 'core/dashboard.html', context)
+   
 @login_required   
 def dashboard(request):
     selected_period = request.GET.get('period', 'today')  # Default to 'today' if none selected
