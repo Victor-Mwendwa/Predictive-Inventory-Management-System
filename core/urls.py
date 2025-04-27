@@ -4,6 +4,9 @@ from . import views
 app_name = 'core'
 
 urlpatterns = [
+    # Home dashboard
+    path('', views.dashboard, name='dashboard'),
+
     # Inventory management
     path('products/', views.product_list, name='product_list'),
     path('products/add/', views.product_create, name='product_create'),
@@ -44,6 +47,9 @@ urlpatterns = [
     # Retailers
     path('retailers/', views.retailer_list, name='retailer_list'),
     
-    # Inventory
+    # Profile page
+    path('profile/', views.profile, name='profile'),
+
+    # Inventory report (duplicate corrected)
     path('inventory-report/', views.inventory_report, name='inventory_report'),
 ]

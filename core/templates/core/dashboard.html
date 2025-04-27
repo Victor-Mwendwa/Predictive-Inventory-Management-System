@@ -1,127 +1,336 @@
-{% extends 'core/base.html' %}
-{% block title %}Dashboard{% endblock %}
-{% block content %}
-  <h1>Welcome, {{ user.username }}</h1>
+{% extends "core/base.html" %}
 
-  <div class="list-group">
-    <a href="{% url 'core:low_stock' %}" class="list-group-item list-group-item-warning">
-      Low Stock ({{ low_stock_count }})
-    </a>
-    <a href="{% url 'core:forecast_report' %}" class="list-group-item list-group-item-info">
-      Outdated Forecasts ({{ outdated_forecasts }})
-    </a>
-    <a href="{% url 'core:product_list' %}" class="list-group-item">All Products</a>
-    <a href="{% url 'core:order_list' %}" class="list-group-item">All Orders</a>
-    <a href="{% url 'core:order_create' %}" class="list-group-item list-group-item-success">
-      Create New Order
-    </a>
-  </div>
-  <div class="row mb-4">
-    <!-- Period Buttons -->
-    {% for p,label in [('today','Today'),('week','This Week'),('month','This Month')] %}
-    <a href="?period={{p}}" class="btn btn-outline-primary {% if selected_period==p %}active{% endif %}">
-      {{ label }}
-    </a>
-    {% endfor %}
-  </div>
-  
-  <div class="row g-4">
-    <!-- Total Products -->
-    <div class="col-md-3">
-      <div class="card text-white bg-secondary">
-        <div class="card-body">
-          <h5>Total Products</h5>
-          <h2>{{ total_products }}</h2>
+{% block title %}Dashboard - Kyosk Inventory{% endblock %}
+
+{% block page_title %}
+    <i class="bi bi-speedometer2 me-2"></i>Dashboard Overview
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Key Metrics Cards -->
+    <div class="col-md-3 mb-4">
+        <div class="card text-white bg-primary h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title text-uppercase small">Total Products</h6>
+                        <h2 class="mb-0">{{ total_products }}</h2>
+                    </div>
+                    <i class="bi bi-box-seam display-6 opacity-50"></i>
+                </div>
+            </div>
         </div>
-      </div>
     </div>
-    <!-- Active Retailers -->
-    <div class="col-md-3">
-      <div class="card text-white bg-info">
-        <div class="card-body">
-          <h5>Active Retailers</h5>
-          <h2>{{ active_retailers }}</h2>
+
+    <div class="col-md-3 mb-4">
+        <div class="card text-white bg-success h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title text-uppercase small">Active Retailers</h6>
+                        <h2 class="mb-0">{{ active_retailers }}</h2>
+                    </div>
+                    <i class="bi bi-shop display-6 opacity-50"></i>
+                </div>
+            </div>
         </div>
-      </div>
     </div>
-    <!-- 30-Day Sales -->
-    <div class="col-md-3">
-      <div class="card text-white bg-success">
-        <div class="card-body">
-          <h5>30-Day Sales (KSh)</h5>
-          <h2>{{ sales_30d|floatformat:2 }}</h2>
+
+    <div class="col-md-3 mb-4">
+        <div class="card text-white bg-info h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title text-uppercase small">30-Day Sales</h6>
+                        <h2 class="mb-0">KSh {{ monthly_sales|floatformat:2 }}</h2>
+                    </div>
+                    <i class="bi bi-currency-dollar display-6 opacity-50"></i>
+                </div>
+            </div>
         </div>
-      </div>
     </div>
-    <!-- Inventory Value -->
-    <div class="col-md-3">
-      <div class="card text-white bg-warning">
-        <div class="card-body">
-          <h5>Inventory Value (KSh)</h5>
-          <h2>{{ inventory_value|floatformat:2 }}</h2>
+
+    <div class="col-md-3 mb-4">
+        <div class="card text-white bg-warning h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title text-uppercase small">Inventory Value</h6>
+                        <h2 class="mb-0">KSh {{ inventory_value|floatformat:2 }}</h2>
+                    </div>
+                    <i class="bi bi-clipboard-data display-6 opacity-50"></i>
+                </div>
+            </div>
         </div>
-      </div>
     </div>
-  </div>
-  
-  <div class="row mt-4">
-    <!-- Sales Trend Chart -->
-    <div class="col-md-8">
-      <canvas id="salesTrendChart"></canvas>
+</div>
+
+<div class="row">
+    <!-- Sales Chart -->
+    <div class="col-lg-8 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Sales Trend (Last 30 Days)</h5>
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" 
+                            data-bs-toggle="dropdown">
+                        <i class="bi bi-calendar"></i> Period
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="?period=7">Last 7 Days</a></li>
+                        <li><a class="dropdown-item" href="?period=30">Last 30 Days</a></li>
+                        <li><a class="dropdown-item" href="?period=90">Last 90 Days</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="card-body">
+                <canvas id="salesChart" height="250"></canvas>
+            </div>
+        </div>
     </div>
-    <!-- Quick Actions -->
-    <div class="col-md-4">
-      {% for action in quick_actions %}
-      <a href="{% url action.url %}" class="btn btn-outline-dark w-100 mb-2">
-        <i class="bi {{ action.icon }}"></i> {{ action.label }}
-      </a>
-      {% endfor %}
+
+    <!-- Inventory Alerts -->
+    <div class="col-lg-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">Inventory Alerts</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    <a href="{% url 'product_list' %}?stock_status=out" 
+                       class="list-group-item list-group-item-action list-group-item-danger">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span>
+                                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                Out of Stock
+                            </span>
+                            <span class="badge bg-danger rounded-pill">{{ out_of_stock_count }}</span>
+                        </div>
+                    </a>
+                    <a href="{% url 'product_list' %}?stock_status=low" 
+                       class="list-group-item list-group-item-action list-group-item-warning">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span>
+                                <i class="bi bi-exclamation-circle-fill me-2"></i>
+                                Low Stock
+                            </span>
+                            <span class="badge bg-warning rounded-pill">{{ low_stock_count }}</span>
+                        </div>
+                    </a>
+                    <a href="{% url 'core:forecast_report' %}" 
+                       class="list-group-item list-group-item-action list-group-item-info">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span>
+                                <i class="bi bi-graph-up me-2"></i>
+                                Forecast Updates Needed
+                            </span>
+                            <span class="badge bg-info rounded-pill">{{ outdated_forecasts }}</span>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>
     </div>
-  </div>
-  
-  <div class="row mt-5">
+</div>
+
+<div class="row mt-4">
     <!-- Recent Orders -->
-    <div class="col-md-6">
-      <h4>Recent Orders <a href="{% url 'core:order_list' %}" class="small">view all</a></h4>
-      <ul class="list-group">
-        {% for o in recent_orders %}
-        <li class="list-group-item">
-          #{{ o.reference }} — {{ o.order_date|date:"M d" }}
-        </li>
-        {% empty %}
-        <li class="list-group-item">No recent orders.</li>
-        {% endfor %}
-      </ul>
+    <div class="col-lg-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Recent Orders</h5>
+                <a href="{% url 'order_list' %}" class="btn btn-sm btn-outline-primary">
+                    View All <i class="bi bi-arrow-right"></i>
+                </a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Order #</th>
+                                <th>Retailer</th>
+                                <th>Date</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for order in recent_orders %}
+                            <tr>
+                                <td>
+                                    <a href="{% url 'order_detail' order.pk %}" class="text-decoration-none">
+                                        #{{ order.reference }}
+                                    </a>
+                                </td>
+                                <td>{{ order.retailer.user.username|truncatechars:12 }}</td>
+                                <td>{{ order.order_date|date:"M d" }}</td>
+                                <td>KSh {{ order.total|floatformat:2 }}</td>
+                                <td>
+                                    <span class="badge 
+                                        {% if order.status == 'DELIVERED' %}bg-success
+                                        {% elif order.status == 'CANCELLED' %}bg-danger
+                                        {% elif order.status == 'PROCESSING' %}bg-info
+                                        {% else %}bg-secondary{% endif %}">
+                                        {{ order.get_status_display }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center py-4 text-muted">
+                                    No recent orders found
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
+
     <!-- Top Products -->
-    <div class="col-md-6">
-      <h4>Top Selling Products <a href="{% url 'core:sales_report' %}" class="small">view reports</a></h4>
-      <ul class="list-group">
-        {% for p in top_products %}
-        <li class="list-group-item">
-          {{ p.product__name }} — {{ p.total_qty }}
-        </li>
-        {% empty %}
-        <li class="list-group-item">No sales data.</li>
-        {% endfor %}
-      </ul>
+    <div class="col-lg-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Top Selling Products</h5>
+                <a href="{% url 'core:sales_report' %}" class="btn btn-sm btn-outline-primary">
+                    View Report <i class="bi bi-arrow-right"></i>
+                </a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Product</th>
+                                <th>Category</th>
+                                <th>Units Sold</th>
+                                <th>Revenue</th>
+                                <th>Stock</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for product in top_products %}
+                            <tr>
+                                <td>
+                                    <a href="{% url 'product_detail' product.pk %}" class="text-decoration-none">
+                                        {{ product.name|truncatechars:20 }}
+                                    </a>
+                                </td>
+                                <td>{{ product.category.name|default:"-" }}</td>
+                                <td>{{ product.monthly_sales|default:0 }}</td>
+                                <td>KSh {{ product.monthly_revenue|floatformat:2|default:"0.00" }}</td>
+                                <td>
+                                    {% if product.inventory.current_stock == 0 %}
+                                        <span class="badge bg-danger">Out</span>
+                                    {% elif product.inventory.current_stock <= product.inventory.reorder_point %}
+                                        <span class="badge bg-warning">Low</span>
+                                    {% else %}
+                                        <span class="badge bg-success">OK</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center py-4 text-muted">
+                                    No sales data available
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
-  </div>
-  
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script>
-    new Chart(document.getElementById('salesTrendChart').getContext('2d'), {
-      type: 'line',
-      data: {
-        labels: {{ sales_trend_labels|safe }},
-        datasets: [{
-          label: 'Revenue (KSh)',
-          data: {{ sales_trend_data|safe }},
-          fill: true,
-        }]
-      },
-      options: { scales: { y: { beginAtZero: true } } }
+</div>
+
+<div class="row mt-4">
+    <!-- Quick Actions -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex flex-wrap gap-2">
+                    <a href="{% url 'core:order_create' %}" class="btn btn-primary">
+                        <i class="bi bi-cart-plus"></i> Create New Order
+                    </a>
+                    <a href="{% url 'core:product_create' %}" class="btn btn-outline-primary">
+                        <i class="bi bi-plus-circle"></i> Add Product
+                    </a>
+                    {% if user.is_staff %}
+                    <a href="{% url 'generate_forecasts' %}" class="btn btn-info">
+                        <i class="bi bi-graph-up"></i> Generate Forecasts
+                    </a>
+                    <a href="{% url 'core:inventory_report' %}" class="btn btn-outline-info">
+                        <i class="bi bi-clipboard-data"></i> Inventory Report
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Sales Chart
+    const salesCtx = document.getElementById('salesChart').getContext('2d');
+    const salesChart = new Chart(salesCtx, {
+        type: 'line',
+        data: {
+            labels: {{ sales_labels|safe }},
+            datasets: [{
+                label: 'Daily Sales (KSh)',
+                data: {{ sales_data|safe }},
+                backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 2,
+                tension: 0.3,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return 'KSh ' + context.raw.toLocaleString();
+                        }
+                    }
+                },
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return 'KSh ' + value.toLocaleString();
+                        }
+                    }
+                }
+            }
+        }
     });
-  </script>
-  
+
+    // Tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+</script>
 {% endblock %}

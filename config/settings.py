@@ -15,7 +15,7 @@ SECRET_KEY = 'your-secret-key-here'
 
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['127.0.0.1']
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -66,7 +66,7 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
+        'ENGINE': 'djongo',
         'NAME': BASE_DIR / 'data' / 'inventory.db',
     }
 }
@@ -124,7 +124,7 @@ STATIC_URL = '/static/'
 
 # Tell Django where your “source” static files live:
 STATICFILES_DIRS = [
-    BASE_DIR / 'static',      # if you have e.g. PROJECT_ROOT/static/css/…
+    BASE_DIR / 'static',      # PROJECT_ROOT/static/css/…
 ]
 
 # Tell Django where to “collect” them for deployment/serving:

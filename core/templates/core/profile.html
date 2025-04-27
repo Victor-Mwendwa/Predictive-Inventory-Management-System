@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2 class="text-2xl font-bold mb-4">User Profile</h2>
+
+    <div class="bg-white p-6 rounded-lg shadow-lg">
+        <p><strong>Username:</strong> {{ user.username }}</p>
+        <p><strong>Email:</strong> {{ user.email }}</p>
+        <p><strong>First Name:</strong> {{ user.first_name }}</p>
+        <p><strong>Last Name:</strong> {{ user.last_name }}</p>
+        <p><strong>Last Login:</strong> {{ user.last_login }}</p>
+        <p><strong>Account Created:</strong> {{ user.date_joined }}</p>
+        
+        <div class="mt-6">
+            <a href="{% url 'password_change' %}" class="btn btn-primary">Change Password</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

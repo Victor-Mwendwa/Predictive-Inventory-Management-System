@@ -66,7 +66,7 @@ def dashboard(request):
         'outdated_forecasts': outdated_forecasts,
         'selected_period': period,
     }
-    return render(request, 'dashboard.html', context)
+    return render(request, 'core/dashboard.html', context)
 
 @login_required
 def dashboard(request):
@@ -148,6 +148,20 @@ def dashboard(request):
         'sales_trend_data':   data,
         'quick_actions':      quick_actions,
     })
+    
+@login_required   
+def dashboard(request):
+    selected_period = request.GET.get('period', 'today')  # Default to 'today' if none selected
+    time_filters = [
+        ('today', 'Today'),
+        ('week', 'This Week'),
+        ('month', 'This Month')
+    ]
+    context = {
+        'time_filters': time_filters,
+        'selected_period': selected_period
+    }
+    return render(request, 'core/dashboard.html', context)
 
 @login_required
 def out_of_stock(request):
@@ -250,13 +264,13 @@ def profile(request):
     return render(request, 'core/profile.html')
  
 def profile(request):
-    return render(request, 'core/base.html')
+    return render(request, 'core/profile.html')
 
 @login_required
 def dashboard(request):
     low_stock_count = Inventory.objects.filter(current_stock__lte=F('reorder_point')).count()
     outdated_forecasts = DemandForecast.objects.filter(forecast_date__lt=timezone.now().date()).count()
-    return render(request, 'dashboard.html', {
+    return render(request, 'core/dashboard.html', {
       'low_stock_count': low_stock_count,
       'outdated_forecasts': outdated_forecasts,
     })   
