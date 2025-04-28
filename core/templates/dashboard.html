@@ -73,7 +73,7 @@
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Sales Trend (Last 30 Days)</h5>
                 <div class="dropdown">
-                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" 
+                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
                             data-bs-toggle="dropdown">
                         <i class="bi bi-calendar"></i> Period
                     </button>
@@ -98,7 +98,7 @@
             </div>
             <div class="card-body p-0">
                 <div class="list-group list-group-flush">
-                    <a href="{% url 'product_list' %}?stock_status=out" 
+                    <a href="{% url 'product_list' %}?stock_status=out"
                        class="list-group-item list-group-item-action list-group-item-danger">
                         <div class="d-flex justify-content-between align-items-center">
                             <span>
@@ -108,7 +108,7 @@
                             <span class="badge bg-danger rounded-pill">{{ out_of_stock_count }}</span>
                         </div>
                     </a>
-                    <a href="{% url 'product_list' %}?stock_status=low" 
+                    <a href="{% url 'product_list' %}?stock_status=low"
                        class="list-group-item list-group-item-action list-group-item-warning">
                         <div class="d-flex justify-content-between align-items-center">
                             <span>
@@ -118,7 +118,7 @@
                             <span class="badge bg-warning rounded-pill">{{ low_stock_count }}</span>
                         </div>
                     </a>
-                    <a href="{% url 'core:forecast_report' %}" 
+                    <a href="{% url 'core:forecast_report' %}"
                        class="list-group-item list-group-item-action list-group-item-info">
                         <div class="d-flex justify-content-between align-items-center">
                             <span>
@@ -168,7 +168,7 @@
                                 <td>{{ order.order_date|date:"M d" }}</td>
                                 <td>KSh {{ order.total|floatformat:2 }}</td>
                                 <td>
-                                    <span class="badge 
+                                    <span class="badge
                                         {% if order.status == 'DELIVERED' %}bg-success
                                         {% elif order.status == 'CANCELLED' %}bg-danger
                                         {% elif order.status == 'PROCESSING' %}bg-info

@@ -299,3 +299,50 @@ a:hover {
 ::-webkit-scrollbar-thumb:hover {
     background: var(--primary-dark);
 }
+
+#wrapper {
+    display: flex;
+    flex-direction: row;
+}
+
+#sidebar-wrapper {
+    min-height: 100vh;
+    width: 250px;
+    margin-left: -250px;
+    transition: margin-left 0.3s ease;
+}
+
+#wrapper.toggled #sidebar-wrapper {
+    margin-left: 0;
+}
+
+#page-content-wrapper {
+    flex: 1;
+    padding: 1.5rem;
+}
+
+.sidebar-heading {
+    padding: 0.875rem 1.25rem;
+    font-size: 1.2rem;
+}
+
+.list-group-item {
+    padding: 1rem 1.5rem;
+    border: none;
+    font-weight: 600;
+}
+
+.list-group-item:hover {
+    background-color: var(--gray-200);
+}
+
+@media (max-width: 768px) {
+    #sidebar-wrapper {
+        margin-left: -250px;
+    }
+
+    #wrapper.toggled #sidebar-wrapper {
+        margin-left: 0;
+    }
+}
+

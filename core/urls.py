@@ -1,10 +1,11 @@
 from django.urls import path
 from . import views
+from django.contrib.auth import views as auth_views
+from .views import RegisterView
 
 app_name = 'core'
 
 urlpatterns = [
-    # Home dashboard
     path('', views.dashboard, name='dashboard'),
 
     # Inventory management

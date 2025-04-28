@@ -90,11 +90,11 @@ DATABASES = {
 # MongoDB Settings
 # MongoDB Settings
 MONGO_USERNAME = 'root'
-MONGO_PASSWORD = 'example'
-MONGO_HOST = 'localhost'  # or your cluster URL
-MONGO_PORT = 27017        # usually 27017 locally
+MONGO_PASSWORD = 'password'
+MONGO_HOST = 'localhost'
+MONGO_PORT = 27017
 
-MONGO_DB_NAME = 'kyoskdata'
+MONGO_DB_NAME = 'kyosk'
 
 # Build the full URI
 MONGO_URI = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"

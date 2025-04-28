@@ -1,11 +1,12 @@
 import logging
 from django.db import transaction, DatabaseError
-from django.db.models import F, Sum
+from django.db.models import F, Sum, DecimalField
 from datetime import timedelta
+from django.db.models import ExpressionWrapper
 from django.utils import timezone
 from ..models import (
     Product, Inventory, OrderItem,
-    InventoryAudit
+    InventoryAudit, Order
 )
 
 logger = logging.getLogger(__name__)
@@ -282,7 +283,12 @@ class AnalyticsManager:
             'product__category__name'
         ).annotate(
             total_sold=Sum('quantity'),
-            total_revenue=Sum(F('quantity') * F('unit_price'))
+            total_revenue=Sum(
+                ExpressionWrapper(
+                    F('quantity') * F('unit_price'),
+                    output_field=DecimalField(max_digits=18, decimal_places=2)
+                )
+            )
         ).order_by('-total_revenue')[:limit]
 
 
