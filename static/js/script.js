@@ -84,24 +84,23 @@ function initFormValidation() {
  */
 function initSidebarToggle() {
     const sidebarToggle = document.body.querySelector('#sidebarToggle');
-    if (sidebarToggle) {
+    const wrapper = document.getElementById('wrapper');
+    if (sidebarToggle && wrapper) {
         sidebarToggle.addEventListener('click', function(e) {
             e.preventDefault();
-            document.body.classList.toggle('sidebar-toggled');
-            document.querySelector('.sidebar').classList.toggle('toggled');
-            
+            wrapper.classList.toggle('toggled');
+
             // Save preference to localStorage
-            if (document.querySelector('.sidebar').classList.contains('toggled')) {
+            if (wrapper.classList.contains('toggled')) {
                 localStorage.setItem('sidebarToggled', 'true');
             } else {
                 localStorage.removeItem('sidebarToggled');
             }
         });
-        
-        // Check localStorage for saved preference
+
+        // Load saved preference from localStorage
         if (localStorage.getItem('sidebarToggled') === 'true') {
-            document.body.classList.add('sidebar-toggled');
-            document.querySelector('.sidebar').classList.add('toggled');
+            wrapper.classList.add('toggled');
         }
     }
 }

@@ -1,51 +1,45 @@
-from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.mixins import LoginRequiredMixin
+from datetime import timedelta
+
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.views.generic import ListView, DetailView, CreateView, UpdateView
-from django.urls import reverse_lazy
-from django.contrib import messages
-from django.db.models import Sum, F, Q
-from django.utils import timezone
-from django.http import JsonResponse
-from datetime import timedelta
-from django.shortcuts import render
-from django.shortcuts import render, get_object_or_404, redirect
+from django.core.paginator import Paginator
+from django.db.models import DecimalField
+from django.db.models import F, Q
 from django.http import HttpResponse
-from django.views.generic import ListView
-from .models import Inventory  
-from .models import OrderItem, Order, Inventory, Product, Retailer, DemandForecast
 from django.http import JsonResponse
-from django.conf import settings
-from .db import db 
+from django.shortcuts import get_object_or_404
+from django.shortcuts import redirect
+from django.urls import reverse_lazy
+from django.utils import timezone
+from django.views.generic import DetailView, CreateView, UpdateView
+from django.views.generic import ListView
 
-
+from core.models import DemandForecast
+from .db import db
+from .forms import (
+    InventoryForm, OrderItemFormSet, RetailerForm
+)
+from .forms import OrderForm
+from .forms import ProductForm
+from .models import Order, Retailer
 from .models import (
-    Product, Inventory, Order, OrderItem, 
-    DemandForecast, Retailer, ProductCategory,
+    Product, Inventory, ProductCategory,
     InventoryAudit
 )
-from .forms import (
-    ProductForm, InventoryForm, OrderForm,
-    OrderItemFormSet, RetailerForm, ProductCategoryForm
-)
 from .utils.ml_model import DemandForecaster
+from django.db.models import Sum, F, DecimalField
+from django.shortcuts import render
+from django.db.models import Sum
+from .models import OrderItem
+from django.contrib.auth import login
+from django.contrib.auth.forms import UserCreationForm
+from django.shortcuts import render, redirect
+from django.views import View
 import json
-from django.shortcuts import render
-from .models import Retailer
-from django.shortcuts import render
-from core.models import DemandForecast
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import render, redirect
-from django.contrib import messages
-from .forms import OrderForm
-from .models import Order, Retailer  
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import render, redirect
-from django.contrib import messages
-from .forms import ProductForm
-from django.utils import timezone
-from datetime import timedelta
-from .db import db
+
+
 
 def my_view(request):
     collection = db['salesorders']
@@ -54,147 +48,141 @@ def my_view(request):
         item['_id'] = str(item['_id'])  # Convert ObjectId to string
     return JsonResponse(data, safe=False)
 
+from collections import defaultdict
+
+class RegisterView(View):
+    def get(self, request):
+        form = UserCreationForm()
+        return render(request, 'registration/register.html', {'form': form})
+
+    def post(self, request):
+        form = UserCreationForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            login(request, user)
+            return redirect('login')
+        return render(request, 'registration/register.html', {'form': form})
+
 @login_required
 def dashboard(request):
-    period = request.GET.get('period', 'today')
     now = timezone.now()
+    thirty_days_ago = now - timedelta(days=30)
+    collection = db['salesOrders']
 
-    # Determine start date based on period
-    if period == 'week':
-        start_date = now - timedelta(days=7)
-    elif period == 'month':
-        start_date = now - timedelta(days=30)
-    else:  # today
-        start_date = now - timedelta(days=1)
+    # Recent Orders - simple .find().sort().limit()
+    recent_orders = list(collection.find(
+        {},
+        {'_id': 0, 'id': 1, 'name': 1, 'retailerName': 1, 'outletName': 1, 'totalAmount': 1, 'createdDate': 1}
+    ).sort('createdDate', -1).limit(5))
 
-    # Recent Orders (last 5)
-    recent_orders_pipeline = [
-        {"$addFields": {
-            "createdDate": {"$dateFromString": {
-                "dateString": {"$substrCP": ["$createdDate", 0, 23]},
-                "format": "%Y-%m-%d %H:%M:%S.%L"
-            }}
-        }},
-        {"$match": {"createdDate": {"$gte": start_date}}},
-        {"$sort": {"createdDate": -1}},
-        {"$limit": 5},
-        {"$project": {
-            "_id": 0,
-            "id": 1,
-            "name": 1,
-            "retailerName": 1,
-            "outletName": 1,
-            "totalAmount": 1,
-            "createdDate": 1
-        }}
-    ]
-    recent_orders = list(db.saleorders.aggregate(recent_orders_pipeline))
-
-    # Top Selling Products (last 30 days)
-    top_products_pipeline = [
-        {"$addFields": {
-            "createdDate": {"$dateFromString": {
-                "dateString": {"$substrCP": ["$createdDate", 0, 23]},
-                "format": "%Y-%m-%d %H:%M:%S.%L"
-            }}
-        }},
-        {"$match": {"createdDate": {"$gte": now - timedelta(days=30)}}},
+    # Top Products
+    top_products = list(collection.aggregate([
+        {"$match": {"createdDate": {"$gte": thirty_days_ago.isoformat()}}},
         {"$unwind": "$items"},
         {"$group": {
             "_id": "$items.catalogItemId",
-            "name": {"$first": "$items.productBundleId"},
+            "product_name": {"$first": "$items.productBundleId"},
             "total_qty": {"$sum": "$items.catalogItemQty"}
         }},
         {"$sort": {"total_qty": -1}},
-        {"$limit": 5},
-        {"$project": {
-            "product__name": "$name",
-            "total_qty": 1,
-            "_id": 0
-        }}
-    ]
-    top_products = list(db.saleorders.aggregate(top_products_pipeline))
+        {"$limit": 5}
+    ]))
 
-    # Total Products (distinct catalog items)
-    total_products = len(db.saleorders.distinct("items.catalogItemId"))
+    # Total Products
+    try:
+        total_products = len(collection.distinct("items.catalogItemId"))
+    except Exception:
+        total_products = 0
+
+    # Total Sale Orders
+    try:
+        total_sale_orders = collection.count_documents({"id": {"$exists": True}})
+    except Exception:
+        total_sale_orders = 0
 
     # Active Retailers
-    active_retailers = db.retailers.count_documents({"active": True})
+    try:
+        active_retailers = db.retailers.count_documents({"active": True})
+    except Exception:
+        active_retailers = 0
 
-    # 30-day Sales Revenue
-    sales_30d_pipeline = [
-        {"$addFields": {
-            "createdDate": {"$dateFromString": {
-                "dateString": {"$substrCP": ["$createdDate", 0, 23]},
-                "format": "%Y-%m-%d %H:%M:%S.%L"
-            }}
-        }},
-        {"$match": {"createdDate": {"$gte": now - timedelta(days=30)}}},
+    # 30-Day Sales by Currency
+    sales_30d_result = collection.aggregate([
+        {"$match": {"createdDate": {"$gte": thirty_days_ago.isoformat()}}},
         {"$unwind": "$items"},
         {"$group": {
-            "_id": None,
+            "_id": "$currency",
             "total": {"$sum": {"$multiply": ["$items.catalogItemQty", "$items.sellingPrice"]}}
         }}
-    ]
-    sales_30d = db.saleorders.aggregate(sales_30d_pipeline).next().get('total', 0) \
-        if db.saleorders.aggregate(sales_30d_pipeline).alive else 0
+    ])
 
-    # Sales Trend Data (last 30 days)
-    sales_trend_pipeline = [
-        {"$addFields": {
-            "createdDate": {"$dateFromString": {
-                "dateString": {"$substrCP": ["$createdDate", 0, 23]},
-                "format": "%Y-%m-%d %H:%M:%S.%L"
-            }}
-        }},
-        {"$match": {"createdDate": {"$gte": now - timedelta(days=30)}}},
+    monthly_sales_by_currency = {result['_id']: result['total'] for result in sales_30d_result}
+
+    # Sales Trend (daily totals by currency)
+    sales_trend_result = collection.aggregate([
+        {"$match": {"createdDate": {"$gte": thirty_days_ago.isoformat()}}},
         {"$unwind": "$items"},
         {"$group": {
-            "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$createdDate"}},
+            "_id": {
+                "date": {"$substr": ["$createdDate", 0, 10]},  # Only first 10 chars => "YYYY-MM-DD"
+                "currency": "$currency",
+            },
             "total": {"$sum": {"$multiply": ["$items.catalogItemQty", "$items.sellingPrice"]}}
         }},
-        {"$sort": {"_id": 1}}
-    ]
-    daily_sales = list(db.saleorders.aggregate(sales_trend_pipeline))
-    labels = [datetime.strptime(day['_id'], "%Y-%m-%d").strftime("%b %d") for day in daily_sales]
-    data = [day['total'] for day in daily_sales]
+        {"$sort": {"_id.date": 1}}
+    ])
+
+    sales_trend_data = defaultdict(lambda: defaultdict(float))
+    for record in sales_trend_result:
+        date = record["_id"]["date"]
+        currency = record["_id"]["currency"]
+        total = record["total"]
+        sales_trend_data[date][currency] += total
+
+    sales_trend_labels = sorted(sales_trend_data.keys())
+
+    # Inventory
+    low_stock_count = Inventory.objects.filter(current_stock__lte=F('reorder_point'), current_stock__gt=0).count()
+    out_of_stock_count = Inventory.objects.filter(current_stock=0).count()
+    outdated_forecasts = DemandForecast.objects.filter(forecast_date__lt=timezone.now().date()).count()
+
+    # Inventory Value
+    inventory_value = Inventory.objects.aggregate(
+        total_value=Sum(
+            F('current_stock') * F('product__price'),
+            output_field=DecimalField()
+        )
+    )['total_value'] or 0
 
     context = {
-        'selected_period': period,
         'recent_orders': recent_orders,
         'top_products': top_products,
         'total_products': total_products,
+        'total_sale_orders': total_sale_orders,
         'active_retailers': active_retailers,
-        'sales_30d': sales_30d,
-        'sales_trend_labels': labels,
-        'sales_trend_data': data,
-        'quick_actions': [
-            {'url': 'order_create', 'label': 'New Order', 'icon': 'bi-cart-plus'},
-            {'url': 'product_create', 'label': 'New Product', 'icon': 'bi-box-seam'},
-            {'url': 'low_stock', 'label': 'Low Stock', 'icon': 'bi-exclamation-triangle'},
-            {'url': 'out_of_stock', 'label': 'Out of Stock', 'icon': 'bi-slash-circle'},
-        ],
-        # Placeholder values for unavailable metrics
-        'low_stock_count': 0,
-        'out_of_stock_count': 0,
-        'outdated_forecasts': 0,
-        'inventory_value': 0,
+        'monthly_sales_by_currency': monthly_sales_by_currency,
+        'sales_trend_labels': sales_trend_labels,
+        'sales_trend_data': dict(sales_trend_data),
+        'low_stock_count': low_stock_count,
+        'out_of_stock_count': out_of_stock_count,
+        'outdated_forecasts': outdated_forecasts,
+        'inventory_value': inventory_value,
     }
     return render(request, 'core/dashboard.html', context)
-   
-@login_required   
-def dashboard(request):
-    selected_period = request.GET.get('period', 'today')  # Default to 'today' if none selected
-    time_filters = [
-        ('today', 'Today'),
-        ('week', 'This Week'),
-        ('month', 'This Month')
-    ]
-    context = {
-        'time_filters': time_filters,
-        'selected_period': selected_period
-    }
-    return render(request, 'core/dashboard.html', context)
+
+# @login_required
+# def dashboard(request):
+#     selected_period = request.GET.get('period', 'today')  # Default to 'today' if none selected
+#     time_filters = [
+#         ('today', 'Today'),
+#         ('week', 'This Week'),
+#         ('month', 'This Month')
+#     ]
+#     context = {
+#         'time_filters': time_filters,
+#         'selected_period': selected_period
+#     }
+#     return render(request, 'core/dashboard.html', context)
 
 @login_required
 def out_of_stock(request):
@@ -242,53 +230,51 @@ def forecast_report(request):
     return render(request, 'core/forecast_report.html', {'forecasts': outdated})
 
 # core/views.py
-from django.shortcuts import render
-from django.db.models import Sum
-from .models import OrderItem
 
-def sales_report(request):
-    # Handle dates 
-    start_date = request.POST.get('start_date')
-    end_date = request.POST.get('end_date')
-
-    # Filter order items in the date range
-    filters = {}
-    if start_date:
-        filters['order__order_date__gte'] = start_date
-    if end_date:
-        filters['order__order_date__lte'] = end_date
-
-    sales_data = OrderItem.objects.filter(**filters).values(
-        'product__name',
-        'product__category__name'
-    ).annotate(
-        total_quantity=Sum('quantity'),
-        total_revenue=Sum('total_price')
-    ).order_by('-total_revenue')
-
-    top_products = sales_data[:5]
-
-    # Daily sales for chart
-    daily_sales = (
-        OrderItem.objects.filter(**filters)
-        .values('order__order_date__date')
-        .annotate(daily_total=Sum('total_price'))
-        .order_by('order__order_date__date')
-    )
-
-    # Compute totals
-    total_revenue = sum(item['total_revenue'] for item in sales_data)
-    total_quantity = sum(item['total_quantity'] for item in sales_data)
-
-    return render(request, 'sales_report.html', {
-        'sales_data': sales_data,
-        'top_products': top_products,
-        'daily_sales': daily_sales,
-        'total_revenue': total_revenue,
-        'total_quantity': total_quantity,
-        'start_date': start_date,
-        'end_date': end_date,
-    })
+# def sales_report(request):
+#     # Handle dates
+#     start_date = request.POST.get('start_date')
+#     end_date = request.POST.get('end_date')
+#
+#     # Filter order items in the date range
+#     filters = {}
+#     if start_date:
+#         filters['order__order_date__gte'] = start_date
+#     if end_date:
+#         filters['order__order_date__lte'] = end_date
+#
+#     sales_data = OrderItem.objects.filter(**filters).values(
+#         'product__name',
+#         'product__category__name'
+#     ).annotate(
+#         total_quantity=Sum('quantity'),
+#         total_revenue=Sum('total_price')
+#     ).order_by('-total_revenue')
+#
+#     top_products = sales_data[:5]
+#
+#     # Daily sales for chart
+#     daily_sales = (
+#         OrderItem.objects.filter(**filters)
+#         .values('order__order_date__date')
+#         .annotate(
+#             daily_total=Sum('total_price', output_field=DecimalField())
+#         )
+#         .order_by('order__order_date__date')
+#     )
+#     # Compute totals
+#     total_revenue = sum(item['total_revenue'] for item in sales_data)
+#     total_quantity = sum(item['total_quantity'] for item in sales_data)
+#
+#     return render(request, 'sales_report.html', {
+#         'sales_data': sales_data,
+#         'top_products': top_products,
+#         'daily_sales': daily_sales,
+#         'total_revenue': total_revenue,
+#         'total_quantity': total_quantity,
+#         'start_date': start_date,
+#         'end_date': end_date,
+#     })
 
 def reports(request):
     return render(request, 'core/reports.html')
@@ -299,14 +285,15 @@ def profile(request):
 def profile(request):
     return render(request, 'core/profile.html')
 
-@login_required
-def dashboard(request):
-    low_stock_count = Inventory.objects.filter(current_stock__lte=F('reorder_point')).count()
-    outdated_forecasts = DemandForecast.objects.filter(forecast_date__lt=timezone.now().date()).count()
-    return render(request, 'core/dashboard.html', {
-      'low_stock_count': low_stock_count,
-      'outdated_forecasts': outdated_forecasts,
-    })   
+# @login_required
+# def dashboard(request):
+#     low_stock_count = Inventory.objects.filter(current_stock__lte=F('reorder_point')).count()
+#     outdated_forecasts = DemandForecast.objects.filter(forecast_date__lt=timezone.now().date()).count()
+#     return render(request, 'core/dashboard.html', {
+#       'low_stock_count': low_stock_count,
+#       'outdated_forecasts': outdated_forecasts,
+#     })
+
 class DashboardView(LoginRequiredMixin, ListView):
     template_name = 'core/dashboard.html'
     context_object_name = 'alerts'
@@ -686,43 +673,144 @@ class RetailerUpdateView(LoginRequiredMixin, UpdateView):
 
 @login_required
 def sales_report(request):
-    # Default to last 30 days
-    end_date = timezone.now().date()
-    start_date = end_date - timedelta(days=30)
-    
-    if request.method == 'POST':
-        start_date = request.POST.get('start_date')
-        end_date = request.POST.get('end_date')
-    
-    # Get sales data
-    sales_data = OrderItem.objects.filter(
-        order__order_date__date__range=[start_date, end_date]
-    ).values(
-        'product__name',
-        'product__category__name'
-    ).annotate(
-        total_quantity=Sum('quantity'),
-        total_revenue=Sum(F('quantity') * F('unit_price'))
-    ).order_by('-total_revenue')
-    
-    # Get top products
-    top_products = sales_data.order_by('-total_quantity')[:5]
-    
-    # Get sales by day for chart
-    daily_sales = OrderItem.objects.filter(
-        order__order_date__date__range=[start_date, end_date]
-    ).values(
-        'order__order_date__date'
-    ).annotate(
-        daily_total=Sum(F('quantity') * F('unit_price'))
-    ).order_by('order__order_date__date')
-    
+    now = timezone.now()
+    collection = db['salesOrders']  # Ensure correct collection name (you had 'salesOrders', case sensitivity matters)
+
+    # Filters
+    start_date = request.POST.get('start_date')
+    end_date = request.POST.get('end_date')
+
+    if start_date and end_date:
+        start_date = timezone.datetime.fromisoformat(start_date)
+        end_date = timezone.datetime.fromisoformat(end_date) + timedelta(days=1)
+    else:
+        end_date = now
+        start_date = now - timedelta(days=30)
+
+    ## === TOP PRODUCTS ===
+    pipeline = [
+        {
+            "$addFields": {
+                "createdDateParsed": {
+                    "$dateFromString": {
+                        "dateString": {"$substrCP": ["$createdDate", 0, 23]},
+                        "format": "%Y-%m-%d %H:%M:%S.%L"
+                    }
+                }
+            }
+        },
+        {"$match": {"createdDateParsed": {"$gte": start_date, "$lt": end_date}}},
+        {"$unwind": "$items"},
+        {"$group": {
+            "_id": {
+                "productBundleId": "$items.productBundleId",
+                "categoryId": "$items.categoryId",
+            },
+            "total_quantity": {"$sum": "$items.catalogItemQty"},
+            "total_revenue": {"$sum": {"$multiply": ["$items.catalogItemQty", "$items.sellingPrice"]}}
+        }},
+        {"$sort": {"total_revenue": -1}},
+    ]
+
+    results = list(collection.aggregate(pipeline))
+
+    sales_data_list = []
+    for doc in results:
+        sales_data_list.append({
+            "product__name": doc["_id"]["productBundleId"],
+            "product__category__name": doc["_id"]["categoryId"],
+            "total_quantity": doc["total_quantity"],
+            "total_revenue": doc["total_revenue"],
+        })
+
+    # Top 5 Products
+    top_products = sales_data_list[:5]
+
+    ## === PAGINATE all products ===
+    paginator = Paginator(sales_data_list, 20)  # 20 products per page
+    page_number = request.GET.get('page')
+    sales_data = paginator.get_page(page_number)
+
+    ## === DAILY TREND (for Chart) ===
+    trend_pipeline = [
+        {
+            "$addFields": {
+                "createdDateParsed": {
+                    "$dateFromString": {
+                        "dateString": {"$substrCP": ["$createdDate", 0, 23]},
+                        "format": "%Y-%m-%d %H:%M:%S.%L"
+                    }
+                }
+            }
+        },
+        {"$match": {"createdDateParsed": {"$gte": start_date, "$lt": end_date}}},
+        {"$unwind": "$items"},
+        {"$group": {
+            "_id": {
+                "date": {"$dateToString": {"format": "%Y-%m-%d", "date": "$createdDateParsed"}},
+                "currency": "$currency",
+            },
+            "daily_total": {"$sum": {"$multiply": ["$items.catalogItemQty", "$items.sellingPrice"]}}
+        }},
+        {"$sort": {"_id.date": 1}}
+    ]
+
+    daily_sales_raw = list(collection.aggregate(trend_pipeline))
+
+    # Restructure daily sales
+    daily_sales = defaultdict(lambda: {"KES": 0, "UGX": 0, "TZS": 0, "NGN": 0})
+    for entry in daily_sales_raw:
+        date = entry['_id']['date']
+        currency = entry['_id']['currency']
+        daily_sales[date][currency] = entry['daily_total']
+
+    sales_trend_labels = sorted(daily_sales.keys())
+    currencies = ["KES", "UGX", "TZS", "NGN"]
+    sales_trend_data = {
+        currency: [daily_sales[date][currency] for date in sales_trend_labels]
+        for currency in currencies
+    }
+
+    ## === TOTALS by Currency ===
+    totals_pipeline = [
+        {
+            "$addFields": {
+                "createdDateParsed": {
+                    "$dateFromString": {
+                        "dateString": {"$substrCP": ["$createdDate", 0, 23]},
+                        "format": "%Y-%m-%d %H:%M:%S.%L"
+                    }
+                }
+            }
+        },
+        {"$match": {"createdDateParsed": {"$gte": start_date, "$lt": end_date}}},
+        {"$unwind": "$items"},
+        {"$group": {
+            "_id": "$currency",
+            "total": {"$sum": {"$multiply": ["$items.catalogItemQty", "$items.sellingPrice"]}}
+        }},
+    ]
+
+    monthly_sales_by_currency = {}
+    for result in collection.aggregate(totals_pipeline):
+        monthly_sales_by_currency[result["_id"]] = result["total"]
+
+    ## === GRAND TOTALS ===
+    total_revenue = sum(item['total_revenue'] for item in sales_data_list)
+    total_quantity = sum(item['total_quantity'] for item in sales_data_list)
+
+    ## === Render Template ===
     return render(request, 'core/sales_report.html', {
-        'sales_data': sales_data,
+        'sales_data': sales_data,  # Paginated
         'top_products': top_products,
-        'daily_sales': list(daily_sales),
-        'start_date': start_date,
-        'end_date': end_date,
+        'sales_trend_labels_json': json.dumps(sales_trend_labels),
+        'sales_trend_data_json': json.dumps(sales_trend_data),
+        'currencies_json': json.dumps(currencies),
+        'monthly_sales_by_currency': monthly_sales_by_currency,
+        'total_revenue': total_revenue,
+        'total_quantity': total_quantity,
+        'start_date': start_date.date(),
+        'end_date': (end_date - timedelta(days=1)).date(),
     })
 
 
@@ -780,8 +868,8 @@ def audit_log(request):
     
 # Product views
 def product_list(request):
-    return HttpResponse("Product list")
-
+    items = Inventory.objects.filter(current_stock=0)
+    return render(request, 'core/product_list.html', {'items': items})
 def product_create(request):
     return HttpResponse("Create product")
 
@@ -795,18 +883,24 @@ def product_delete(request, pk):
     return HttpResponse(f"Delete product: {pk}")
 
 # Stock views
+@login_required
 def stock_list(request):
-    return HttpResponse("Stock list")
+    items = Inventory.objects.filter(current_stock=0)
+    return render(request, 'core/stock_list.html', {'items': items})
+
 
 def low_stock(request):
-    return HttpResponse("Low stock")
+    items = Inventory.objects.filter(current_stock=0)
+    return render(request, 'core/out_of_stock.html', {'items': items})
+
 
 def stock_update(request):
     return HttpResponse("Update stock")
 
 # Forecast views
 def forecast_list(request):
-    return HttpResponse("Forecast list")
+    items = Inventory.objects.filter(current_stock=0)
+    return render(request, 'core/forecast_report.html', {'items': items})
 
 def generate_forecasts(request):
     return HttpResponse("Generate forecasts")

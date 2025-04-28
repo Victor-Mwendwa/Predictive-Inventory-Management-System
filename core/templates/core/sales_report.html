@@ -134,47 +134,126 @@
         {% endfor %}
       </tbody>
     </table>
+     <div class="d-flex justify-content-end mt-4">
+  <nav aria-label="Page navigation">
+    <ul class="pagination pagination-sm mb-0">
+
+      {% if sales_data.has_previous %}
+        <li class="page-item">
+          <a class="page-link" href="?page={{ sales_data.previous_page_number }}" aria-label="Previous">
+            <span aria-hidden="true">&laquo;</span>
+          </a>
+        </li>
+      {% else %}
+        <li class="page-item disabled">
+          <a class="page-link" href="#" tabindex="-1" aria-label="Previous">
+            <span aria-hidden="true">&laquo;</span>
+          </a>
+        </li>
+      {% endif %}
+
+      {% if sales_data.number > 3 %}
+        <li class="page-item"><a class="page-link" href="?page=1">1</a></li>
+        {% if sales_data.number > 4 %}
+          <li class="page-item disabled"><a class="page-link" href="#">...</a></li>
+        {% endif %}
+      {% endif %}
+
+      {% for num in sales_data.paginator.page_range %}
+        {% if num >= sales_data.number|add:'-2' and num <= sales_data.number|add:'2' %}
+          {% if sales_data.number == num %}
+            <li class="page-item active" aria-current="page"><a class="page-link" href="#">{{ num }}</a></li>
+          {% else %}
+            <li class="page-item"><a class="page-link" href="?page={{ num }}">{{ num }}</a></li>
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+
+      {% if sales_data.number < sales_data.paginator.num_pages|add:'-2' %}
+        {% if sales_data.number < sales_data.paginator.num_pages|add:'-3' %}
+          <li class="page-item disabled"><a class="page-link" href="#">...</a></li>
+        {% endif %}
+        <li class="page-item"><a class="page-link" href="?page={{ sales_data.paginator.num_pages }}">{{ sales_data.paginator.num_pages }}</a></li>
+      {% endif %}
+
+      {% if sales_data.has_next %}
+        <li class="page-item">
+          <a class="page-link" href="?page={{ sales_data.next_page_number }}" aria-label="Next">
+            <span aria-hidden="true">&raquo;</span>
+          </a>
+        </li>
+      {% else %}
+        <li class="page-item disabled">
+          <a class="page-link" href="#" tabindex="-1" aria-label="Next">
+            <span aria-hidden="true">&raquo;</span>
+          </a>
+        </li>
+      {% endif %}
+
+    </ul>
+  </nav>
+</div>
+
   </div>
 </div>
+
 {% endblock %}
 
 {% block extra_js %}
 <script>
-  // Prepare data for Chart.js
-  const labels = [
-    {% for entry in daily_sales %}
-      "{{ entry.order__order_date__date }}",
-    {% endfor %}
-  ];
-  const data = [
-    {% for entry in daily_sales %}
-      {{ entry.daily_total|floatformat:2 }},
-    {% endfor %}
-  ];
+document.addEventListener('DOMContentLoaded', function() {
+  const labels = {{ sales_trend_labels_json|safe }};
+  const currencies = {{ currencies_json|safe }};
+  const salesTrendData = {{ sales_trend_data_json|safe }};
+
+    // 🐞 Debugging: See what's being rendered
+  console.log("labels:", labels);
+  console.log("currencies:", currencies);
+  console.log("salesTrendData:", salesTrendData);
+
+  if (!labels.length) {
+    console.warn('No sales data available for the selected period.');
+    document.getElementById('dailySalesChart').parentElement.innerHTML = `
+      <div class="alert alert-warning text-center">
+        No sales data available for the selected period.
+      </div>
+    `;
+    return;
+  }
+
+  const datasets = currencies.map(currency => ({
+    label: currency,
+    data: salesTrendData[currency] || [],
+    fill: false,
+    tension: 0.3,
+    borderWidth: 2,
+    borderColor: getRandomColor(),
+    backgroundColor: 'transparent'
+  }));
 
   const ctx = document.getElementById('dailySalesChart').getContext('2d');
   new Chart(ctx, {
     type: 'line',
     data: {
       labels: labels,
-      datasets: [{
-        label: 'Daily Revenue (KSh)',
-        data: data,
-        fill: true,
-        tension: 0.3
-      }]
+      datasets: datasets
     },
     options: {
+      responsive: true,
       scales: {
-        x: {
-          title: { display: true, text: 'Date' }
-        },
-        y: {
-          title: { display: true, text: 'Revenue (KSh)' },
-          beginAtZero: true
-        }
+        x: { title: { display: true, text: 'Date' }},
+        y: { title: { display: true, text: 'Revenue' }, beginAtZero: true }
       }
     }
   });
+
+  function getRandomColor() {
+    const colors = ['blue', 'green', 'red', 'orange', 'purple', 'cyan', 'pink', 'yellow', 'teal'];
+    return colors[Math.floor(Math.random() * colors.length)];
+  }
+});
 </script>
+
+</script>
+
 {% endblock %}
