@@ -1,11 +1,111 @@
 {% extends "core/base.html" %}
+
+{% block title %}Out of Stock Items{% endblock %}
+
 {% block content %}
-<h2>Low Stock Items</h2>
-<ul>
-    {% for item in items %}
-        <li>{{ item.product.name }} - {{ item.current_stock }}</li>
-    {% empty %}
-        <li>No low stock items</li>
-    {% endfor %}
-</ul>
+<div class="container mt-4">
+    <h2><i class="bi bi-exclamation-circle-fill text-warning me-2"></i> Low Stock Items</h2>
+
+    <!-- Filter/Search Form -->
+    <form method="get" class="row mb-4">
+        <div class="col-md-4">
+            <input type="text" name="search" value="{{ search_query }}" class="form-control" placeholder="Search Item Code">
+        </div>
+        <div class="col-md-4">
+            <select name="territory" class="form-select">
+                <option value="">All Territories</option>
+                {% for territory in territories %}
+                    <option value="{{ territory }}" {% if territory == selected_territory %}selected{% endif %}>{{ territory }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-4 d-grid">
+            <button type="submit" class="btn btn-outline-warning">Filter</button>
+        </div>
+    </form>
+
+    <!-- Low Stock Table + Submit Form -->
+    <form method="post" action="{% url 'core:submit_to_finance' %}">
+        {% csrf_token %}
+        <div class="card shadow-sm">
+            <div class="card-body">
+                {% if products %}
+                <table class="table table-hover table-bordered align-middle">
+                    <thead class="table-warning">
+                        <tr>
+                            <th><input type="checkbox" id="select-all"></th>
+                            <th>Item Code</th>
+                            <th>Territory</th>
+                            <th>Projected Qty</th>
+                            <th>Bin Qty</th>
+                            <th>Last Updated</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in products %}
+                        <tr>
+                                                    <td><input type="checkbox" name="selected_items" value="{{ item.itemCode }}|{{ item.territoryId }}"></td>
+
+                            <td>{{ item.itemCode }}</td>
+                            <td>{{ item.territoryId }}</td>
+                            <td>
+                                {% if item.projectedQty <= 3 %}
+                                    <span class="badge bg-danger">{{ item.projectedQty }}</span>
+                                {% elif item.projectedQty <= 7 %}
+                                    <span class="badge bg-warning text-dark">{{ item.projectedQty }}</span>
+                                {% else %}
+                                    <span class="badge bg-success">{{ item.projectedQty }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ item.binQty }}</td>
+                            <td>{{ item.lastUpdatedAt }}</td>
+                        </tr>
+                        <input type="hidden" name="selected_items" value="{{ item.itemCode }}|{{ item.territoryId }}">
+                        {% endfor %}
+                    </tbody>
+                </table>
+                <div class="mt-3 text-end">
+                    <button type="submit" class="btn btn-warning">
+                        <i class="bi bi-send-fill me-1"></i> Submit to Finance for Refill
+                    </button>
+                </div>
+                {% else %}
+                    <p class="text-muted">No low stock items found for the selected filters.</p>
+                {% endif %}
+            </div>
+        </div>
+    </form>
+
+    <!-- Pagination -->
+    {% if products.has_other_pages %}
+    <nav class="mt-3" aria-label="Low Stock Pagination">
+        <ul class="pagination justify-content-center">
+            {% if products.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ products.previous_page_number }}&search={{ search_query }}&territory={{ selected_territory }}">Previous</a>
+            </li>
+            {% endif %}
+            <li class="page-item disabled">
+                <span class="page-link">Page {{ products.number }} of {{ products.paginator.num_pages }}</span>
+            </li>
+            {% if products.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ products.next_page_number }}&search={{ search_query }}&territory={{ selected_territory }}">Next</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+    <script>
+document.addEventListener("DOMContentLoaded", function () {
+    const selectAll = document.getElementById("select-all");
+    if (selectAll) {
+        selectAll.addEventListener("change", function () {
+            const checkboxes = document.querySelectorAll('input[name="selected_items"]');
+            checkboxes.forEach(cb => cb.checked = this.checked);
+        });
+    }
+});
+</script>
 {% endblock %}
