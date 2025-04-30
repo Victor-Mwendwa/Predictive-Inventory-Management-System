@@ -46,7 +46,7 @@ from django.contrib.auth.forms import UserCreationForm
 from django.shortcuts import render, redirect
 from django.views import View
 import json
-
+import sys
 
 
 def my_view(request):
@@ -66,9 +66,9 @@ class RegisterView(View):
     def post(self, request):
         form = UserCreationForm(request.POST)
         if form.is_valid():
-            user = form.save()
-            login(request, user)
-            return redirect('login')
+            form.save()
+            messages.success(request, "Account created successfully. Please log in.")
+            return redirect('login') 
         return render(request, 'registration/register.html', {'form': form})
 
 
@@ -285,12 +285,34 @@ def order_create(request):
         form = OrderForm(initial={'retailer': retailer})
     return render(request, 'core/create_order.html', {'form': form})
 
+@login_required
 def forecast_report(request):
-    from django.utils import timezone
-    from datetime import timedelta
+    collection = db["forecastResults"]
 
-    outdated = DemandForecast.objects.filter(created_at__lt=timezone.now() - timedelta(days=7))
-    return render(request, 'core/forecast_report.html', {'forecasts': outdated})
+    try:
+        raw = list(collection.find())
+        for row in raw:
+            row["_id"] = str(row["_id"])
+            if isinstance(row.get("forecast_date"), datetime):
+                row["forecast_date"] = row["forecast_date"].strftime("%Y-%m-%d")
+            else:
+                row["forecast_date"] = str(row.get("forecast_date", ""))[:10]
+
+            row["forecastedQty"] = round(row.get("forecastedQty", 0), 2)
+            row["suggested_action"] = "Reorder" if row["forecastedQty"] > 10 else "Monitor"
+    except Exception as e:
+        raw = []
+        print(f"⚠️ Forecast fetch error: {e}")
+
+    # ⬇️ Add pagination
+    paginator = Paginator(raw, 25)  # Show 25 items per page
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, "core/forecast_report.html", {
+        "forecasts": page_obj,
+        "page_obj": page_obj,
+    })
 
 # core/views.py
 
@@ -724,17 +746,16 @@ def trigger_forecast_task(request):
         steps = []
 
         steps.append("🔁 Running merge_sales_pipeline.py ...")
-        subprocess.run(['python3', merge_script], check=True)
+        subprocess.run([sys.executable, merge_script], check=True)
         steps.append("✅ merge_sales_pipeline.py complete")
 
         steps.append("🔁 Running train_lightgbm_forecast.py ...")
-        subprocess.run(['python3', train_script], check=True)
+        subprocess.run([sys.executable, train_script], check=True)
         steps.append("✅ train_lightgbm_forecast.py complete")
 
         return JsonResponse({'success': True, 'log': steps})
     except subprocess.CalledProcessError as e:
         return JsonResponse({'success': False, 'log': steps + [f"❌ Error: {str(e)}"]})
-
 
 @login_required
 def retailer_list(request):
@@ -759,21 +780,49 @@ class RetailerListView(LoginRequiredMixin, ListView):
         
         return queryset
 
+@login_required
 def forecast_results_view(request):
-    forecast_path = "forecast_7_day_results.csv"
     try:
-        df = pd.read_csv(forecast_path)
-        df.sort_values(["territoryId", "catalogItemId", "forecast_date"], inplace=True)
+        return render(request, "core/forecast_results.html", {
+            "csv_file_1": "/static/forecasts/forecast_7_day_results.csv",
+            "csv_file_2": "/static/forecasts/forecast_summary.csv",  # Only if generated
+            "image_file": "/static/forecasts/feature_importance.png",
+        })
+    except Exception as e:
+        return render(request, "core/forecast_results.html", {
+            "error": str(e)
+        })
 
-        # Simple inventory suggestion: order if forecast > threshold
-        df["suggested_action"] = df["forecastedQty"].apply(lambda qty: "Reorder" if qty > 10 else "Monitor")
 
-        # Convert to list of dicts for rendering
-        forecast_data = df.to_dict(orient="records")
-        return render(request, "core/forecast_table.html", {"forecast_data": forecast_data})
-    except FileNotFoundError:
-        return render(request, "core/forecast_table.html", {"forecast_data": [], "error": "No forecast file found."})
+@login_required
+def forecast_table_view(request):
+    collection = db["forecastResults"]
+    try:
+        data = list(collection.find())
+        for row in data:
+            row["_id"] = str(row["_id"])
+            if isinstance(row.get("forecast_date"), datetime):
+                row["forecast_date"] = row["forecast_date"].strftime("%Y-%m-%d")
+            else:
+                row["forecast_date"] = str(row.get("forecast_date", ""))[:10]
 
+            row["forecastedQty"] = round(row.get("forecastedQty", 0), 2)
+            row["suggested_action"] = "Reorder" if row["forecastedQty"] > 10 else "Monitor"
+
+        # ⬇️ Add pagination
+        paginator = Paginator(data, 25)  # 25 rows per page
+        page_number = request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
+
+        return render(request, "core/forecast_table.html", {
+            "forecast_data": page_obj,
+            "page_obj": page_obj,
+        })
+    except Exception as e:
+        return render(request, "core/forecast_table.html", {
+            "forecast_data": [],
+            "error": str(e),
+        })
 class RetailerDetailView(LoginRequiredMixin, DetailView):
     model = Retailer
     template_name = 'core/retailer_detail.html'
@@ -1015,7 +1064,7 @@ def submit_to_finance(request):
         item_code, territory = entry.split("|")
         print(f"[Finance Request] Refill needed for: {item_code} (Territory: {territory})")
 
-    messages.success(request, f"Sent {len(selected)} item(s) to finance for stock replenishment (simulation only).")
+    messages.success(request, f"Sent {len(selected)} item(s) to finance for stock replenishment.")
     return redirect('core:low_stock')
 
 @login_required

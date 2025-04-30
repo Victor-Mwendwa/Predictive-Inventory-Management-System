@@ -1,0 +1,77 @@
+date,territoryId,catalogItemId,catalogItemQty,normalizedTotalAmount,territory_encoded,item_encoded,dayofyear
+2025-04-14,Abuja-Bwari,Abuja-BwariPeak Milk Filled Powder Sachet 12g CARTON (210.0 PC),2,13861.999999999998,0,0,104
+2025-04-14,Embu,EmbuMt. Kenya Milk ESL 500ML CARTON (1.0 Item),5,2995.0,1,1,104
+2025-04-14,Embu,EmbuPostman Cooking Oil 10L JERICAN (1.0 PC),1,2320.0,1,2,104
+2025-04-14,Embu,EmbuPostman Cooking Oil 20L JERICAN (1.0 Item),1,4630.0,1,3,104
+2025-04-14,Ibadan-Bodija,Ibadan-BodijaDano Milk Cool Cow 12g + Extra 10 Sachet HALF CARTON (135.0 PC),1,12557.0,2,4,104
+2025-04-14,Ibadan-Bodija,Ibadan-BodijaDevon King's Cooking Oil 1000ml Sachet HALF CARTON (6 PCS),8,85811.0,2,5,104
+2025-04-14,Ibadan-Bodija,Ibadan-BodijaDevon King's Cooking Oil 5L CARTON (4.0 PC),1,64089.99999999999,2,6,104
+2025-04-14,Ibadan-Bodija,Ibadan-BodijaDevon Kings's Cooking Oil 10L JERICAN (1.0 PCS),1,21721.0,2,7,104
+2025-04-14,Ibadan-Bodija,Ibadan-BodijaIndomie Noodles Oriental Fried 70g CARTON (40.0 PC),3,12557.0,2,8,104
+2025-04-14,Ibadan-Bodija,Ibadan-BodijaMiksi Milk Plain 320g CARTON (12.0 PACKETS),1,64089.99999999999,2,9,104
+2025-04-14,Igoma,IgomaSoftcare  Sanitary Pads purple CARTON (24.0 pcs),2,3933.0,3,10,104
+2025-04-14,Jos-Central,Jos-CentralMaltina Malt Can 33cl*24 PACK (24.0 CANS),19,66120.0,4,11,104
+2025-04-14,Kiambu,KiambuAmara Body Milk Lotion 400ml PC (1.0 Pc),1,3160.0,5,12,104
+2025-04-14,Kiambu,KiambuArimis Petroleum Jelly 50G 12PC DOZEN (1.0 Dzn),1,3160.0,5,13,104
+2025-04-14,Kiambu,KiambuHalisi Fry Cooking Oil 20L JERICAN (1.0 Item),2,11035.0,5,14,104
+2025-04-14,Kiambu,KiambuMt. Kenya Milk ESL 200ML CARTON (1.0 Item),1,2280.0,5,15,104
+2025-04-14,Kiambu,KiambuMt. Kenya Milk ESL 500ML - 18 PC CARTON (18 pcs),2,2280.0,5,16,104
+2025-04-14,Kiambu,KiambuPembe Maize Flour 2KG BALE (12.0 PC),1,6395.0,5,17,104
+2025-04-14,Kiambu,KiambuPostman Cooking Oil 10L JERICAN (1.0 PC),1,3160.0,5,18,104
+2025-04-14,Kiambu,KiambuPostman Cooking Oil 20L JERICAN (1.0 Item),2,9505.0,5,19,104
+2025-04-14,Kiambu,KiambuShujaa Maize Flour 2KG BALE (12.0 PC),6,9894.0,5,20,104
+2025-04-14,Kiambu,KiambuSunveat Biscuits Nice CARTON (30 Pkts),2,12665.0,5,21,104
+2025-04-14,Kisumu1,Kisumu1Dola Maize Flour 2KG BALE (12.0 PC),1,1720.0,6,22,104
+2025-04-14,Kisumu1,Kisumu1Postman Cooking Oil 20L JERICAN (1.0 Item),2,9298.0,6,23,104
+2025-04-14,Luzira,LuziraAzam  All Purpose Flour 2KG BALE (12.0 PCS),7,37986.0,7,24,104
+2025-04-14,Luzira,LuziraMirinda Fruity Soda 330ML  CARTON (12.0 PC),6,2293.2,7,25,104
+2025-04-14,Luzira,LuziraPembe All Purpose Flour 2KG BALE (12.0 PCS),5,21859.5,7,26,104
+2025-04-14,Luzira,LuziraRwenzori Water     500ML CARTON (24.0 Bottles),1,16126.5,7,27,104
+2025-04-14,Luzira,LuziraSilkee Jumbo Toilet Tissue Rolls 4 pcs PACK (4 Rolls),5,16126.5,7,28,104
+2025-04-14,Luzira,LuziraSupreme Wheat Flour 2KG BALE (12.0 PC),1,21859.5,7,29,104
+2025-04-14,Majengo Mombasa,Majengo MombasaChamp RTD Orange 300ML CARTON (12.0 Pcs),5,1200.0,8,30,104
+2025-04-14,Makindye,MakindyeIndomie Chicken Flavored Noodles 70g CARTON (40.0 PC),8,9984.0,9,31,104
+2025-04-14,Mwenge,MwengeAzam Hbf All Purpose Flour 25Kg BAG (1.0 bag),3,22552.05,10,32,104
+2025-04-14,Mwenge,MwengeAzania Marhaba Washing Powder 500g BAG (30.0 sachets),1,22552.05,10,33,104
+2025-04-14,Mwenge,MwengeDoffi pink Washing Powder 500gm OUTER (10.0 packets),3,4534.35,10,34,104
+2025-04-14,Mwenge,MwengeDoffi washing powder blue 3kg BUCKET (1 bucket),2,22552.05,10,35,104
+2025-04-14,Mwenge,MwengeJAMAA BAR SOAP 800GMS CARTON (25 pcs),1,22552.05,10,36,104
+2025-04-14,Mwenge,MwengeJumbo creamrich chocolate flavoured Biscuits 80gm OUTER (24.0 pckts),1,22552.05,10,37,104
+2025-04-14,Mwenge,MwengeKasuku Matches Box.  10s OUTER (10.0 pcs),2,22552.05,10,38,104
+2025-04-14,Mwenge,MwengeKleesoft pink Washing Powder 400gm CARTON (3.0 outers),3,27086.4,10,39,104
+2025-04-14,Mwenge,MwengeKorie Cooking Oil 3L HALF CARTON (3.0 jericans),1,22552.05,10,40,104
+2025-04-14,Mwenge,MwengeNeelsalt 200g BALE (30.0 packets),1,22552.05,10,41,104
+2025-04-14,Mwenge,MwengeNiceone flower perfume 3kg BUCKET (1 buckets),1,22552.05,10,42,104
+2025-04-14,Mwenge,MwengeRed gold Chilli mwendokasi Sauces 850g CARTON (12 pcs),1,22552.05,10,43,104
+2025-04-14,Mwenge,MwengeSayona Fruttis Mango 200ml CARTON (24 pcs),1,22552.05,10,44,104
+2025-04-14,Mwenge,MwengeSiri cream lemon 200g DOZEN (12.0 pcs),1,22552.05,10,45,104
+2025-04-14,Mwenge,MwengeUhai drinking water 13L CARTON (1.0 pc),5,22552.05,10,46,104
+2025-04-14,Nalukolongo,Nalukolongo7UP Soda 330ML CARTON (12 Pcs),1,1528.8,11,47,104
+2025-04-14,Nalukolongo,NalukolongoIndomie Chicken Flavored Noodles 70g CARTON (40.0 PC),1,3673.8,11,48,104
+2025-04-14,Nalukolongo,NalukolongoKaswa All Purpose Flour 2KG BALE (12.0 PCS),8,21684.0,11,49,104
+2025-04-14,Nalukolongo,NalukolongoMirinda Fruity Soda 330ML  CARTON (12.0 PC),3,5202.6,11,50,104
+2025-04-14,Nalukolongo,NalukolongoMountain Dew  Soda 2L CARTON (12 Bottles),1,3673.8,11,51,104
+2025-04-14,Nalukolongo,NalukolongoMountain dew  Soda 330ml CARTON (12.0 PC),4,5202.6,11,52,104
+2025-04-14,Ruiru,RuiruBella Junior Tissue Rolls 10PC OUTER (1.0 Outer),1,3246.0,12,53,104
+2025-04-14,Ruiru,RuiruBella Tissue Rolls 10 Pack Wrapped OUTER (10 Pcs),1,3246.0,12,54,104
+2025-04-14,Ruiru,RuiruExcel Glucose Glucose 50G DOZEN (72.0 PC),1,1275.0,12,55,104
+2025-04-14,Ruiru,RuiruIndomie Noodles Chicken 120G CARTON (1.0 Item),2,10606.0,12,56,104
+2025-04-14,Ruiru,RuiruKensalt Salt 200G BALE (30.0 PC),1,3958.0,12,57,104
+2025-04-14,Ruiru,RuiruKensalt Salt 500G BALE (40.0 PC),1,3958.0,12,58,104
+2025-04-14,Ruiru,RuiruKristal Aqua Drinking Water 1Ltr CARTON (12.0 Pcs),1,3958.0,12,59,104
+2025-04-14,Ruiru,RuiruKristal Aqua Drinking Water 500ml CARTON (24.0 Pcs),1,3958.0,12,60,104
+2025-04-14,Ruiru,RuiruMeta Clear Bar Soap 1kg CARTON (10 PC),1,6648.0,12,61,104
+2025-04-14,Ruiru,RuiruMt. Kenya Milk ESL 200ML CARTON (1.0 Item),6,16712.0,12,62,104
+2025-04-14,Ruiru,RuiruMt. Kenya Milk ESL 500ML - 18 PC CARTON (18 pcs),13,22890.0,12,63,104
+2025-04-14,Ruiru,RuiruMt. Kenya Milk ESL 500ML CARTON (1.0 Item),12,11252.0,12,64,104
+2025-04-14,Ruiru,RuiruNala Instant Noodles 120G CARTON (20 Pcs),1,3958.0,12,65,104
+2025-04-14,Ruiru,RuiruPostman Cooking Oil 20L JERICAN (1.0 Item),2,9240.0,12,66,104
+2025-04-14,Ruiru,RuiruPredator Energy Drink 400ML CASE (12.0 PC),1,1244.0,12,67,104
+2025-04-14,Ruiru,RuiruRhino Matches Kubwa 10 Boxes OUTER (1.0 Item),1,1275.0,12,68,104
+2025-04-14,Ruiru,RuiruRiri Maize Flour 2KG BALE (12.0 PC),2,9580.0,12,69,104
+2025-04-14,Ruiru,RuiruSumo Candles 8PC CARTON (12.0 Outers),1,1275.0,12,70,104
+2025-04-14,Ruiru,RuiruSumo Candles 8PC OUTER (1.0 Outer),1,6648.0,12,71,104
+2025-04-14,Ruiru,RuiruSunveat Biscuits Happy Happy Mango CARTON (1.0 Item),2,6890.0,12,72,104
+2025-04-14,Ruiru,RuiruSunveat Biscuits Somo Choco 15G CARTON (1.0 Item),1,6648.0,12,73,104
+2025-04-14,Ruiru,RuiruZenta Bar Soap Cream 800G CARTON (12.0 PC),1,5056.0,12,74,104
+2025-04-14,Voi,VoiDola Wheat Flour 1KG BALE (24.0 PC),1,1749.0,13,75,104

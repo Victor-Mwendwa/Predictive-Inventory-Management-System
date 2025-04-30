@@ -1,0 +1,27 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}Forecast Output Files{% endblock %}
+{% block page_title %}📁 Forecast Output Files{% endblock %}
+
+{% block content %}
+<div class="container">
+  <h4 class="mb-3">📦 Download Forecast Outputs</h4>
+
+  {% if error %}
+    <div class="alert alert-warning">{{ error }}</div>
+  {% endif %}
+
+  <div class="d-flex flex-column gap-3">
+    {% if csv_file_1 %}
+      <a href="{{ csv_file_1 }}" class="btn btn-primary w-50">📥 Download Forecast 7-Day CSV</a>
+    {% endif %}
+    {% if csv_file_2 %}
+      <a href="{{ csv_file_2 }}" class="btn btn-outline-primary w-50">📥 Download Forecast Summary CSV</a>
+    {% endif %}
+    {% if image_file %}
+      <a href="{{ image_file }}" target="_blank" class="btn btn-outline-secondary w-50">📊 View Feature Importance</a>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

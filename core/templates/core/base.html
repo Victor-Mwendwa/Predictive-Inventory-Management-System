@@ -75,10 +75,10 @@
         <a href="{% url 'core:generate_forecasts' %}" class="list-group-item list-group-item-action d-flex align-items-center">
             <i class="bi bi-gear me-2"></i> Generate Forecasts
         </a>
-      <a href="{% url 'core:produce_forecasts' %}" class="list-group-item list-group-item-action d-flex align-items-center">
+        <a href="{% url 'core:produce_forecasts' %}" class="list-group-item list-group-item-action d-flex align-items-center">
             <i class="bi bi-gear me-2"></i> Produce Forecasts
         </a>
-        <a href="{% url 'core:forecast_results' %}" class="list-group-item list-group-item-action">
+       <a href="{% url 'core:forecast_results' %}" class="list-group-item list-group-item-action">
             <i class="bi bi-bar-chart-line"></i> View Forecast Results
         </a>
 
@@ -91,9 +91,9 @@
         <a href="{% url 'core:forecast_report' %}" class="list-group-item list-group-item-action d-flex align-items-center">
             <i class="bi bi-journal-text me-2"></i> Forecast Report
         </a>
-        <a href="{% url 'core:inventory_report' %}" class="list-group-item list-group-item-action d-flex align-items-center">
+        <!-- <a href="{% url 'core:inventory_report' %}" class="list-group-item list-group-item-action d-flex align-items-center">
             <i class="bi bi-clipboard-data me-2"></i> Inventory Report
-        </a>
+        </a> -->
 
         {% if user.is_staff %}
         <hr class="my-2">

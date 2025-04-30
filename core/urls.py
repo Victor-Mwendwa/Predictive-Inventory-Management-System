@@ -25,6 +25,7 @@ urlpatterns = [
     path("forecasts/results/", views.forecast_results_view, name="forecast_results"),
     path('forecasts/produce/', views.forecast_ui_page, name='produce_forecasts'),
     path('forecasts/run-task/', views.trigger_forecast_task, name='run_forecast_task'),
+    path("forecasts-table/", views.forecast_table_view, name="forecast_table"),
 
     # Reports
     path('forecast-report/', views.forecast_report, name='forecast_report'),

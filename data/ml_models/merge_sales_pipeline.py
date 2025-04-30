@@ -5,12 +5,13 @@ from pymongo.errors import BulkWriteError
 import time
 
 # Connect to MongoDB
-client = MongoClient("mongodb://root:password@localhost:27017/")
-db = client["kyosk"]
+client = MongoClient("mongodb://root:example@localhost:27017/")
+db = client["kyoskdata"]
 
 # Aggregation pipeline to merge data from multiple collections
 pipeline = [
     {"$unwind": "$items"},
+    {"$limit": 100},
     {"$lookup": {
         "from": "projectedQuantities",
         "let": {"item_code": "$items.catalogItemId", "territory": "$territoryId"},

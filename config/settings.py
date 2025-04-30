@@ -90,11 +90,11 @@ DATABASES = {
 # MongoDB Settings
 # MongoDB Settings
 MONGO_USERNAME = 'root'
-MONGO_PASSWORD = 'password'
+MONGO_PASSWORD = 'example'
 MONGO_HOST = 'localhost'
 MONGO_PORT = 27017
 
-MONGO_DB_NAME = 'kyosk'
+MONGO_DB_NAME = 'kyoskdata'
 
 # Build the full URI
 MONGO_URI = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"

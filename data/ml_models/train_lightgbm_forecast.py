@@ -1,20 +1,23 @@
-# train_lightgbm_forecast.py
-
-import pandas as pd
-import numpy as np
-from pymongo import MongoClient
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import mean_squared_error, r2_score
-import lightgbm as lgb
-import matplotlib.pyplot as plt
-import seaborn as sns
-import os
 from datetime import timedelta
 
+import lightgbm as lgb
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from pymongo import MongoClient
+from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+import os
+
+
 # MongoDB connection
-client = MongoClient("mongodb://root:password@localhost:27017/")
-db = client["kyosk"]
+client = MongoClient("mongodb://root:example@localhost:27017/")
+db = client["kyoskdata"]
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+STATIC_DIR = os.path.join(PROJECT_ROOT, 'static', 'forecasts')
+os.makedirs(STATIC_DIR, exist_ok=True)
+
 
 # Load merged sales data
 print("📥 Loading data from MongoDB 'mergedSalesData' collection...")
@@ -101,7 +104,32 @@ future_df = future_df[(future_df['territory_encoded'] >= 0) & (future_df['item_e
 X_future = future_df[['territory_encoded', 'item_encoded', 'dayofyear']]
 future_df['forecastedQty'] = model.predict(X_future)
 
-# Save forecast results
-forecast_path = "forecast_7_day_results.csv"
+# Ensure forecast directory exists
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+STATIC_DIR = os.path.join(PROJECT_ROOT, 'static', 'forecasts')
+os.makedirs(STATIC_DIR, exist_ok=True)
+
+# Save aggregated training data
+csv_path = os.path.join(STATIC_DIR, "daily_demand_training_data.csv")
+aggregated.to_csv(csv_path, index=False)
+print(f"📦 Exported training data to {csv_path}")
+
+# Save feature importance plot
+fig, ax = plt.subplots(figsize=(10, 6))
+lgb.plot_importance(model, max_num_features=10, importance_type='gain', ax=ax)
+plt.title("Feature Importance")
+plt.tight_layout()
+importance_path = os.path.join(STATIC_DIR, "feature_importance.png")
+plt.savefig(importance_path)
+print(f"📸 Saved feature importance plot to {importance_path}")
+
+# Save forecast results to CSV
+forecast_path = os.path.join(STATIC_DIR, "forecast_7_day_results.csv")
 future_df.to_csv(forecast_path, index=False)
 print(f"📦 Saved 7-day forecast results to {forecast_path}")
+
+# Save forecast results to MongoDB
+future_df['forecast_date'] = pd.to_datetime(future_df['forecast_date'])
+db["forecastResults"].delete_many({})
+db["forecastResults"].insert_many(future_df.to_dict("records"))
+print("✅ Forecast results saved to MongoDB 'forecastResults' collection.")

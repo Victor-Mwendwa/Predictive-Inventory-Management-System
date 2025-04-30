@@ -1,4 +1,4 @@
-{% extends 'core/base.html' %}
+{% extends "core/base.html" %}
 {% load static %}
 
 {% block title %}Forecast Report{% endblock %}
@@ -10,21 +10,27 @@
     <table class="table table-hover table-bordered align-middle">
         <thead class="table-light">
             <tr>
+                <th>Territory</th>
                 <th>Product</th>
-                <th>Retailer</th>
                 <th>Forecast Date</th>
-                <th>Predicted Demand</th>
-                <th>Confidence Level</th>
+                <th>Forecast Qty</th>
+                <th>Action</th>
             </tr>
         </thead>
         <tbody>
             {% for forecast in forecasts %}
             <tr>
-                <td>{{ forecast.product.name }}</td>
-                <td>{{ forecast.retailer.name }}</td>
-                <td>{{ forecast.forecast_date|date:"M d, Y" }}</td>
-                <td>{{ forecast.predicted_demand }}</td>
-                <td>{{ forecast.confidence_level }}%</td>
+                <td>{{ forecast.territoryId }}</td>
+                <td>{{ forecast.catalogItemId }}</td>
+                <td>{{ forecast.forecast_date }}</td>
+                <td>{{ forecast.forecastedQty|floatformat:2 }}</td>
+                <td>
+                    {% if forecast.suggested_action == "Reorder" %}
+                        <span class="badge bg-danger">Reorder</span>
+                    {% else %}
+                        <span class="badge bg-warning text-dark">Monitor</span>
+                    {% endif %}
+                </td>
             </tr>
             {% empty %}
             <tr>
@@ -34,4 +40,29 @@
         </tbody>
     </table>
 </div>
+
+<!-- ⬇️ Pagination controls -->
+<nav>
+  <ul class="pagination justify-content-center">
+    {% if forecasts.has_previous %}
+      <li class="page-item">
+        <a class="page-link" href="?page={{ forecasts.previous_page_number }}">Previous</a>
+      </li>
+    {% else %}
+      <li class="page-item disabled"><span class="page-link">Previous</span></li>
+    {% endif %}
+
+    <li class="page-item disabled">
+      <span class="page-link">Page {{ forecasts.number }} of {{ forecasts.paginator.num_pages }}</span>
+    </li>
+
+    {% if forecasts.has_next %}
+      <li class="page-item">
+        <a class="page-link" href="?page={{ forecasts.next_page_number }}">Next</a>
+      </li>
+    {% else %}
+      <li class="page-item disabled"><span class="page-link">Next</span></li>
+    {% endif %}
+  </ul>
+</nav>
 {% endblock %}
