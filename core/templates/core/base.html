@@ -11,6 +11,9 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
     <link href="{% static 'css/styles.css' %}" rel="stylesheet">
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+
     {% block extra_head %}{% endblock %}
 </head>
 <body class="bg-light">
@@ -53,11 +56,11 @@
         <a href="{% url 'core:product_list' %}" class="list-group-item list-group-item-action d-flex align-items-center">
             <i class="bi bi-box-seam me-2"></i> Products
         </a>
-        <a href="{% url 'core:low_stock' %}" class="list-group-item list-group-item-action d-flex align-items-center">
-            <i class="bi bi-graph-down me-2"></i> Low Stocks
+        <a href="{% url 'core:out_of_stock' %}" class="list-group-item list-group-item-action d-flex align-items-center">
+            <i class="bi bi-graph-down me-2"></i> Out of Stock
         </a>
-        <a href="{% url 'core:stock_list' %}" class="list-group-item list-group-item-action d-flex align-items-center">
-            <i class="bi bi-layers me-2"></i> Manage Stock
+        <a href="{% url 'core:low_stock' %}" class="list-group-item list-group-item-action d-flex align-items-center">
+            <i class="bi bi-layers me-2"></i> Low Stock
         </a>
 
         <hr class="my-2">
@@ -71,6 +74,12 @@
         </a>
         <a href="{% url 'core:generate_forecasts' %}" class="list-group-item list-group-item-action d-flex align-items-center">
             <i class="bi bi-gear me-2"></i> Generate Forecasts
+        </a>
+      <a href="{% url 'core:produce_forecasts' %}" class="list-group-item list-group-item-action d-flex align-items-center">
+            <i class="bi bi-gear me-2"></i> Produce Forecasts
+        </a>
+        <a href="{% url 'core:forecast_results' %}" class="list-group-item list-group-item-action">
+            <i class="bi bi-bar-chart-line"></i> View Forecast Results
         </a>
 
         <hr class="my-2">

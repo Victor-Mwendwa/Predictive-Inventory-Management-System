@@ -1,5 +1,10 @@
+import os
+import pprint
+import subprocess
+
+import pandas as pd
 from django.contrib.auth.mixins import LoginRequiredMixin
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -15,8 +20,11 @@ from django.urls import reverse_lazy
 from django.utils import timezone
 from django.views.generic import DetailView, CreateView, UpdateView
 from django.views.generic import ListView
+from pymongo import DESCENDING
 
 from core.models import DemandForecast
+from django.conf import settings
+
 from .db import db
 from .forms import (
     InventoryForm, OrderItemFormSet, RetailerForm
@@ -63,50 +71,92 @@ class RegisterView(View):
             return redirect('login')
         return render(request, 'registration/register.html', {'form': form})
 
+
+from django.db.models import Sum, F, DecimalField
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import render
+from django.utils import timezone
+from datetime import datetime, timedelta
+import json
+from .db import db  # Your MongoDB client
+
 @login_required
 def dashboard(request):
     now = timezone.now()
     thirty_days_ago = now - timedelta(days=30)
     collection = db['salesOrders']
+    projected_collection = db['projectedQuantities']
 
-    # Recent Orders - simple .find().sort().limit()
+    # Recent Orders (last 5)
     recent_orders = list(collection.find(
         {},
-        {'_id': 0, 'id': 1, 'name': 1, 'retailerName': 1, 'outletName': 1, 'totalAmount': 1, 'createdDate': 1}
+        {
+            '_id': 0,
+            'id': 1,
+            'name': 1,
+            'retailerName': 1,
+            'outletName': 1,
+            'totalAmount': 1,
+            'createdDate': 1
+        }
     ).sort('createdDate', -1).limit(5))
 
-    # Top Products
+    # Add formatted date field
+    for order in recent_orders:
+        try:
+            order["created_date_fmt"] = datetime.fromisoformat(order["createdDate"][:19])
+        except Exception:
+            order["created_date_fmt"] = None
+
+    # Top Selling Products (last 30 days)
     top_products = list(collection.aggregate([
-        {"$match": {"createdDate": {"$gte": thirty_days_ago.isoformat()}}},
+        {"$match": {
+            "createdDate": {"$gte": thirty_days_ago.isoformat()},
+            "items": {"$exists": True, "$ne": []}
+        }},
         {"$unwind": "$items"},
         {"$group": {
-            "_id": "$items.catalogItemId",
-            "product_name": {"$first": "$items.productBundleId"},
-            "total_qty": {"$sum": "$items.catalogItemQty"}
+            "_id": {
+                "catalogItemId": "$items.catalogItemId",
+                "currency": "$items.currency",
+            },
+            "itemName": {"$first": "$items.productBundleId"},  # ✅ correct name field
+            "category": {"$first": "$items.categoryId"},  # ✅ category
+            "total_qty": {"$sum": "$items.catalogItemQty"},
+            "total_revenue": {
+                "$sum": {
+                    "$multiply": ["$items.catalogItemQty", "$items.sellingPrice"]
+                }
+            }
         }},
-        {"$sort": {"total_qty": -1}},
+        {"$sort": {"total_revenue": -1}},
         {"$limit": 5}
     ]))
 
-    # Total Products
+    for p in top_products:
+        p["currency"] = p["_id"]["currency"]
+        p["catalogItemId"] = p["_id"]["catalogItemId"]
+        extra = projected_collection.find_one({"itemCode": p["catalogItemId"]})
+        p["stock"] = extra.get("projectedQty", "N/A") if extra else "N/A"
+        p["binQty"] = extra.get("binQty", "N/A") if extra else "N/A"
+
+    # Total Metrics
     try:
         total_products = len(collection.distinct("items.catalogItemId"))
     except Exception:
         total_products = 0
 
-    # Total Sale Orders
     try:
         total_sale_orders = collection.count_documents({"id": {"$exists": True}})
     except Exception:
         total_sale_orders = 0
 
-    # Active Retailers
     try:
         active_retailers = db.retailers.count_documents({"active": True})
     except Exception:
         active_retailers = 0
 
-    # 30-Day Sales by Currency
+    # Monthly Sales by Currency (last 30 days)
     sales_30d_result = collection.aggregate([
         {"$match": {"createdDate": {"$gte": thirty_days_ago.isoformat()}}},
         {"$unwind": "$items"},
@@ -115,16 +165,15 @@ def dashboard(request):
             "total": {"$sum": {"$multiply": ["$items.catalogItemQty", "$items.sellingPrice"]}}
         }}
     ])
-
     monthly_sales_by_currency = {result['_id']: result['total'] for result in sales_30d_result}
 
-    # Sales Trend (daily totals by currency)
+    # Sales Trend Data
     sales_trend_result = collection.aggregate([
         {"$match": {"createdDate": {"$gte": thirty_days_ago.isoformat()}}},
         {"$unwind": "$items"},
         {"$group": {
             "_id": {
-                "date": {"$substr": ["$createdDate", 0, 10]},  # Only first 10 chars => "YYYY-MM-DD"
+                "date": {"$dateToString": {"format": "%Y-%m-%d", "date": {"$toDate": "$createdDate"}}},
                 "currency": "$currency",
             },
             "total": {"$sum": {"$multiply": ["$items.catalogItemQty", "$items.sellingPrice"]}}
@@ -132,28 +181,59 @@ def dashboard(request):
         {"$sort": {"_id.date": 1}}
     ])
 
-    sales_trend_data = defaultdict(lambda: defaultdict(float))
+    # Process sales trend data
+    currencies = ['KES', 'NGN', 'TZS', 'UGX']
+    sales_trend_data = {}
+
     for record in sales_trend_result:
         date = record["_id"]["date"]
         currency = record["_id"]["currency"]
         total = record["total"]
-        sales_trend_data[date][currency] += total
+
+        if date not in sales_trend_data:
+            sales_trend_data[date] = {curr: 0 for curr in currencies}
+
+        sales_trend_data[date][currency] = total
+
+    if sales_trend_data:
+        all_dates = sorted(sales_trend_data.keys())
+        start_date = min(all_dates)
+        end_date = max(all_dates)
+
+        current_date = datetime.strptime(start_date, '%Y-%m-%d')
+        end_date = datetime.strptime(end_date, '%Y-%m-%d')
+
+        while current_date <= end_date:
+            date_str = current_date.strftime('%Y-%m-%d')
+            if date_str not in sales_trend_data:
+                sales_trend_data[date_str] = {curr: 0 for curr in currencies}
+            current_date += timedelta(days=1)
 
     sales_trend_labels = sorted(sales_trend_data.keys())
 
-    # Inventory
-    low_stock_count = Inventory.objects.filter(current_stock__lte=F('reorder_point'), current_stock__gt=0).count()
-    out_of_stock_count = Inventory.objects.filter(current_stock=0).count()
-    outdated_forecasts = DemandForecast.objects.filter(forecast_date__lt=timezone.now().date()).count()
 
-    # Inventory Value
-    inventory_value = Inventory.objects.aggregate(
-        total_value=Sum(
-            F('current_stock') * F('product__price'),
-            output_field=DecimalField()
-        )
-    )['total_value'] or 0
+    try:
+        out_of_stock_count = projected_collection.count_documents({"projectedQty": 0})
+    except Exception:
+        out_of_stock_count = 0
 
+    try:
+        low_stock_count = projected_collection.count_documents({"projectedQty": {"$gt": 0, "$lte": 10}})
+    except Exception:
+        low_stock_count = 0
+
+    try:
+        outdated_forecasts = db['demandForecasts'].count_documents({"forecast_date": {"$lt": now.date().isoformat()}})
+    except Exception:
+        outdated_forecasts = 0
+
+    try:
+        # Inventory value if you had to compute it from projections
+        inventory_value = 0  # Optional placeholder if you want to later extend
+    except Exception:
+        inventory_value = 0
+
+    # Prepare context
     context = {
         'recent_orders': recent_orders,
         'top_products': top_products,
@@ -161,33 +241,16 @@ def dashboard(request):
         'total_sale_orders': total_sale_orders,
         'active_retailers': active_retailers,
         'monthly_sales_by_currency': monthly_sales_by_currency,
-        'sales_trend_labels': sales_trend_labels,
-        'sales_trend_data': dict(sales_trend_data),
+        'sales_trend_labels': json.dumps(sales_trend_labels),
+        'sales_trend_data': json.dumps(sales_trend_data),
+        'currencies': json.dumps(currencies),
         'low_stock_count': low_stock_count,
         'out_of_stock_count': out_of_stock_count,
         'outdated_forecasts': outdated_forecasts,
         'inventory_value': inventory_value,
     }
+
     return render(request, 'core/dashboard.html', context)
-
-# @login_required
-# def dashboard(request):
-#     selected_period = request.GET.get('period', 'today')  # Default to 'today' if none selected
-#     time_filters = [
-#         ('today', 'Today'),
-#         ('week', 'This Week'),
-#         ('month', 'This Month')
-#     ]
-#     context = {
-#         'time_filters': time_filters,
-#         'selected_period': selected_period
-#     }
-#     return render(request, 'core/dashboard.html', context)
-
-@login_required
-def out_of_stock(request):
-    items = Inventory.objects.filter(current_stock=0)
-    return render(request, 'core/out_of_stock.html', {'items': items})
 
 @login_required
 def product_create(request):
@@ -340,7 +403,7 @@ class ProductListView(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         queryset = super().get_queryset().select_related('category', 'inventory')
-        
+
         # Search functionality
         search_query = self.request.GET.get('search')
         if search_query:
@@ -348,19 +411,19 @@ class ProductListView(LoginRequiredMixin, ListView):
                 Q(name__icontains=search_query) |
                 Q(sku__icontains=search_query) |
                 Q(description__icontains=search_query))
-        
+
         # Filter by category
         category_id = self.request.GET.get('category')
         if category_id:
             queryset = queryset.filter(category_id=category_id)
-        
+
         # Filter by stock status
         stock_status = self.request.GET.get('stock_status')
         if stock_status == 'low':
             queryset = queryset.filter(inventory__current_stock__lte=F('inventory__reorder_point'))
         elif stock_status == 'out':
             queryset = queryset.filter(inventory__current_stock=0)
-        
+
         return queryset
 
     def get_context_data(self, **kwargs):
@@ -587,6 +650,59 @@ def generate_forecasts(request):
     messages.success(request, f"Generated {len(forecasts)} new demand forecasts")
     return redirect('dashboard')
 
+@login_required
+def product_list(request):
+    collection = db['projectedQuantities']
+
+    # Filters
+    search_query = request.GET.get('search')
+    territory_filter = request.GET.get('territory')
+    stock_status = request.GET.get('stock_status')
+
+    query = {}
+
+    if search_query:
+        query["itemCode"] = {"$regex": search_query, "$options": "i"}
+
+    if territory_filter:
+        query["territoryId"] = territory_filter
+
+    if stock_status == "low":
+        query["projectedQty"] = {"$lte": 10}
+    elif stock_status == "out":
+        query["projectedQty"] = 0
+
+    # Fetch and prepare data
+    try:
+        data = list(collection.find(query).sort("lastUpdatedAt", -1))
+        for item in data:
+            item['_id'] = str(item['_id'])  # stringify ObjectId
+            # Optional: Format datetime fields for template display
+            item['lastUpdatedAt'] = item.get('lastUpdatedAt', '')[:10]
+    except Exception as e:
+        data = []
+        print(f"⚠️ MongoDB fetch error: {e}")
+
+    # Pagination
+    paginator = Paginator(data, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # Distinct territories for filter dropdown
+    try:
+        territories = sorted(collection.distinct("territoryId"))
+    except Exception:
+        territories = []
+
+    context = {
+        'products': page_obj,
+        'territories': territories,
+        'search_query': search_query,
+        'selected_territory': territory_filter,
+        'selected_stock_status': stock_status,
+    }
+
+    return render(request, 'core/product_list.html', context)
 
 @login_required
 def forecast_detail(request, pk):
@@ -595,6 +711,30 @@ def forecast_detail(request, pk):
         'forecast': forecast,
         'product': forecast.product,
     })
+@login_required
+def forecast_ui_page(request):
+    return render(request, 'core/forecast_generation.html')
+
+@login_required
+def trigger_forecast_task(request):
+    try:
+        merge_script = os.path.join(settings.BASE_DIR, 'data', 'ml_models', 'merge_sales_pipeline.py')
+        train_script = os.path.join(settings.BASE_DIR, 'data', 'ml_models', 'train_lightgbm_forecast.py')
+
+        steps = []
+
+        steps.append("🔁 Running merge_sales_pipeline.py ...")
+        subprocess.run(['python3', merge_script], check=True)
+        steps.append("✅ merge_sales_pipeline.py complete")
+
+        steps.append("🔁 Running train_lightgbm_forecast.py ...")
+        subprocess.run(['python3', train_script], check=True)
+        steps.append("✅ train_lightgbm_forecast.py complete")
+
+        return JsonResponse({'success': True, 'log': steps})
+    except subprocess.CalledProcessError as e:
+        return JsonResponse({'success': False, 'log': steps + [f"❌ Error: {str(e)}"]})
+
 
 @login_required
 def retailer_list(request):
@@ -619,6 +759,20 @@ class RetailerListView(LoginRequiredMixin, ListView):
         
         return queryset
 
+def forecast_results_view(request):
+    forecast_path = "forecast_7_day_results.csv"
+    try:
+        df = pd.read_csv(forecast_path)
+        df.sort_values(["territoryId", "catalogItemId", "forecast_date"], inplace=True)
+
+        # Simple inventory suggestion: order if forecast > threshold
+        df["suggested_action"] = df["forecastedQty"].apply(lambda qty: "Reorder" if qty > 10 else "Monitor")
+
+        # Convert to list of dicts for rendering
+        forecast_data = df.to_dict(orient="records")
+        return render(request, "core/forecast_table.html", {"forecast_data": forecast_data})
+    except FileNotFoundError:
+        return render(request, "core/forecast_table.html", {"forecast_data": [], "error": "No forecast file found."})
 
 class RetailerDetailView(LoginRequiredMixin, DetailView):
     model = Retailer
@@ -643,6 +797,8 @@ class RetailerDetailView(LoginRequiredMixin, DetailView):
         ).aggregate(total=Sum(F('quantity') * F('unit_price')))['total'] or 0
         
         return context
+
+
 
 
 class RetailerCreateView(LoginRequiredMixin, CreateView):
@@ -674,15 +830,15 @@ class RetailerUpdateView(LoginRequiredMixin, UpdateView):
 @login_required
 def sales_report(request):
     now = timezone.now()
-    collection = db['salesOrders']  # Ensure correct collection name (you had 'salesOrders', case sensitivity matters)
+    collection = db['salesOrders']
 
-    # Filters
-    start_date = request.POST.get('start_date')
-    end_date = request.POST.get('end_date')
+    # Date filters
+    start_date_str = request.POST.get('start_date')
+    end_date_str = request.POST.get('end_date')
 
-    if start_date and end_date:
-        start_date = timezone.datetime.fromisoformat(start_date)
-        end_date = timezone.datetime.fromisoformat(end_date) + timedelta(days=1)
+    if start_date_str and end_date_str:
+        start_date = timezone.datetime.fromisoformat(start_date_str)
+        end_date = timezone.datetime.fromisoformat(end_date_str) + timedelta(days=1)
     else:
         end_date = now
         start_date = now - timedelta(days=30)
@@ -696,18 +852,34 @@ def sales_report(request):
                         "dateString": {"$substrCP": ["$createdDate", 0, 23]},
                         "format": "%Y-%m-%d %H:%M:%S.%L"
                     }
+                },
+                "itemsWithCurrency": {
+                    "$map": {
+                        "input": "$items",
+                        "as": "item",
+                        "in": {
+                            "$mergeObjects": ["$$item", {"currency": "$currency"}]
+                        }
+                    }
                 }
             }
         },
-        {"$match": {"createdDateParsed": {"$gte": start_date, "$lt": end_date}}},
-        {"$unwind": "$items"},
+        {"$match": {
+            "createdDateParsed": {"$gte": start_date, "$lt": end_date},
+            "itemsWithCurrency": {"$exists": True, "$ne": []}
+        }},
+        {"$unwind": "$itemsWithCurrency"},
         {"$group": {
             "_id": {
-                "productBundleId": "$items.productBundleId",
-                "categoryId": "$items.categoryId",
+                "productBundleId": "$itemsWithCurrency.productBundleId",
+                "categoryId": "$itemsWithCurrency.categoryId"
             },
-            "total_quantity": {"$sum": "$items.catalogItemQty"},
-            "total_revenue": {"$sum": {"$multiply": ["$items.catalogItemQty", "$items.sellingPrice"]}}
+            "total_quantity": {"$sum": "$itemsWithCurrency.catalogItemQty"},
+            "total_revenue": {
+                "$sum": {
+                    "$multiply": ["$itemsWithCurrency.catalogItemQty", "$itemsWithCurrency.sellingPrice"]
+                }
+            }
         }},
         {"$sort": {"total_revenue": -1}},
     ]
@@ -723,15 +895,14 @@ def sales_report(request):
             "total_revenue": doc["total_revenue"],
         })
 
-    # Top 5 Products
     top_products = sales_data_list[:5]
 
-    ## === PAGINATE all products ===
-    paginator = Paginator(sales_data_list, 20)  # 20 products per page
+    # Paginate all
+    paginator = Paginator(sales_data_list, 20)
     page_number = request.GET.get('page')
     sales_data = paginator.get_page(page_number)
 
-    ## === DAILY TREND (for Chart) ===
+    ## === SALES TREND ===
     trend_pipeline = [
         {
             "$addFields": {
@@ -740,29 +911,38 @@ def sales_report(request):
                         "dateString": {"$substrCP": ["$createdDate", 0, 23]},
                         "format": "%Y-%m-%d %H:%M:%S.%L"
                     }
+                },
+                "itemsWithCurrency": {
+                    "$map": {
+                        "input": "$items",
+                        "as": "item",
+                        "in": {
+                            "$mergeObjects": ["$$item", {"currency": "$currency"}]
+                        }
+                    }
                 }
             }
         },
         {"$match": {"createdDateParsed": {"$gte": start_date, "$lt": end_date}}},
-        {"$unwind": "$items"},
+        {"$unwind": "$itemsWithCurrency"},
         {"$group": {
             "_id": {
                 "date": {"$dateToString": {"format": "%Y-%m-%d", "date": "$createdDateParsed"}},
-                "currency": "$currency",
+                "currency": "$itemsWithCurrency.currency",
             },
-            "daily_total": {"$sum": {"$multiply": ["$items.catalogItemQty", "$items.sellingPrice"]}}
+            "daily_total": {"$sum": {"$multiply": ["$itemsWithCurrency.catalogItemQty", "$itemsWithCurrency.sellingPrice"]}}
         }},
         {"$sort": {"_id.date": 1}}
     ]
 
     daily_sales_raw = list(collection.aggregate(trend_pipeline))
 
-    # Restructure daily sales
+    # Normalize trend data
     daily_sales = defaultdict(lambda: {"KES": 0, "UGX": 0, "TZS": 0, "NGN": 0})
     for entry in daily_sales_raw:
-        date = entry['_id']['date']
-        currency = entry['_id']['currency']
-        daily_sales[date][currency] = entry['daily_total']
+        date = entry["_id"]["date"]
+        currency = entry["_id"]["currency"]
+        daily_sales[date][currency] = entry["daily_total"]
 
     sales_trend_labels = sorted(daily_sales.keys())
     currencies = ["KES", "UGX", "TZS", "NGN"]
@@ -771,7 +951,7 @@ def sales_report(request):
         for currency in currencies
     }
 
-    ## === TOTALS by Currency ===
+    ## === TOTALS BY CURRENCY ===
     totals_pipeline = [
         {
             "$addFields": {
@@ -780,14 +960,23 @@ def sales_report(request):
                         "dateString": {"$substrCP": ["$createdDate", 0, 23]},
                         "format": "%Y-%m-%d %H:%M:%S.%L"
                     }
+                },
+                "itemsWithCurrency": {
+                    "$map": {
+                        "input": "$items",
+                        "as": "item",
+                        "in": {
+                            "$mergeObjects": ["$$item", {"currency": "$currency"}]
+                        }
+                    }
                 }
             }
         },
         {"$match": {"createdDateParsed": {"$gte": start_date, "$lt": end_date}}},
-        {"$unwind": "$items"},
+        {"$unwind": "$itemsWithCurrency"},
         {"$group": {
-            "_id": "$currency",
-            "total": {"$sum": {"$multiply": ["$items.catalogItemQty", "$items.sellingPrice"]}}
+            "_id": "$itemsWithCurrency.currency",
+            "total": {"$sum": {"$multiply": ["$itemsWithCurrency.catalogItemQty", "$itemsWithCurrency.sellingPrice"]}}
         }},
     ]
 
@@ -801,7 +990,7 @@ def sales_report(request):
 
     ## === Render Template ===
     return render(request, 'core/sales_report.html', {
-        'sales_data': sales_data,  # Paginated
+        'sales_data': sales_data,
         'top_products': top_products,
         'sales_trend_labels_json': json.dumps(sales_trend_labels),
         'sales_trend_data_json': json.dumps(sales_trend_data),
@@ -813,6 +1002,21 @@ def sales_report(request):
         'end_date': (end_date - timedelta(days=1)).date(),
     })
 
+@login_required
+def submit_to_finance(request):
+    selected = request.POST.getlist("selected_items")
+
+    if not selected:
+        messages.warning(request, "No items selected for finance submission.")
+        return redirect('core:low_stock')
+
+    # Dummy log: pretend to send to finance
+    for entry in selected:
+        item_code, territory = entry.split("|")
+        print(f"[Finance Request] Refill needed for: {item_code} (Territory: {territory})")
+
+    messages.success(request, f"Sent {len(selected)} item(s) to finance for stock replenishment (simulation only).")
+    return redirect('core:low_stock')
 
 @login_required
 def inventory_report(request):
@@ -866,33 +1070,170 @@ def audit_log(request):
         'audit_entries': audit_entries,
     })
     
-# Product views
-def product_list(request):
-    items = Inventory.objects.filter(current_stock=0)
-    return render(request, 'core/product_list.html', {'items': items})
-def product_create(request):
-    return HttpResponse("Create product")
-
 def product_detail(request, pk):
     return HttpResponse(f"Product detail: {pk}")
 
-def product_update(request, pk):
-    return HttpResponse(f"Update product: {pk}")
-
-def product_delete(request, pk):
-    return HttpResponse(f"Delete product: {pk}")
-
 # Stock views
+from django.core.paginator import Paginator
+from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
+from .db import db  # MongoDB connection assumed configured
+
+
 @login_required
 def stock_list(request):
-    items = Inventory.objects.filter(current_stock=0)
-    return render(request, 'core/stock_list.html', {'items': items})
+    collection = db['projectedQuantities']
 
+    # Base query: no initial condition
+    query = {}
 
+    # Filters
+    search_query = request.GET.get('search', '').strip()
+    territory_filter = request.GET.get('territory', '').strip()
+    stock_status = request.GET.get('stock_status', '').strip()
+
+    # Apply filters dynamically
+    if search_query:
+        query["itemCode"] = {"$regex": search_query, "$options": "i"}
+
+    if territory_filter:
+        query["territoryId"] = {"$regex": f"^{territory_filter}$", "$options": "i"}
+
+    if stock_status == "low":
+        query["projectedQty"] = {"$gt": 0, "$lte": 10}  # Low stock
+    elif stock_status == "out":
+        query["projectedQty"] = 0  # Out of stock
+
+    print(f"Running Query: {query}")  # Debug
+
+    # Fetch and prepare data
+    try:
+        data = list(collection.find(query).sort("lastUpdatedAt", -1))
+        for item in data:
+            item['_id'] = str(item['_id'])  # Convert ObjectId to string
+            item['lastUpdatedAt'] = item.get('lastUpdatedAt', '')[:10]
+    except Exception as e:
+        data = []
+        print(f"⚠️ MongoDB fetch error: {e}")
+
+    # Pagination
+    paginator = Paginator(data, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # Distinct territories for filter dropdown
+    try:
+        territories = sorted(collection.distinct("territoryId"))
+    except Exception:
+        territories = []
+
+    context = {
+        'products': page_obj,
+        'territories': territories,
+        'search_query': search_query,
+        'selected_territory': territory_filter,
+        'selected_stock_status': stock_status,
+    }
+
+    return render(request, 'core/stock_list.html', context)
+@login_required
+def out_of_stock(request):
+    collection = db['projectedQuantities']
+
+    # Base query: only out of stock
+    query = {"projectedQty": 0}
+
+    # Optional search + territory filters
+    search_query = request.GET.get('search', '').strip()
+    territory_filter = request.GET.get('territory', '').strip()
+
+    if search_query:
+        query["itemCode"] = {"$regex": search_query, "$options": "i"}
+
+    if territory_filter:
+        query["territoryId"] = {"$regex": f"^{territory_filter}$", "$options": "i"}
+
+    print(f"Running Query: {query}")  # Optional for debugging
+
+    # Fetch and prepare data
+    try:
+        data = list(collection.find(query).sort("lastUpdatedAt", -1))
+        for item in data:
+            item['_id'] = str(item['_id'])  # Convert ObjectId to string
+            item['lastUpdatedAt'] = item.get('lastUpdatedAt', '')[:10]
+    except Exception as e:
+        data = []
+        print(f"⚠️ MongoDB fetch error: {e}")
+
+    # Pagination
+    paginator = Paginator(data, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # Distinct territories for filter dropdown
+    try:
+        territories = sorted(collection.distinct("territoryId"))
+    except Exception:
+        territories = []
+
+    context = {
+        'products': page_obj,
+        'territories': territories,
+        'search_query': search_query,
+        'selected_territory': territory_filter,
+    }
+    return render(request, 'core/out_of_stock.html', context)
+
+@login_required
 def low_stock(request):
-    items = Inventory.objects.filter(current_stock=0)
-    return render(request, 'core/out_of_stock.html', {'items': items})
+    collection = db['projectedQuantities']
 
+    # Base query: low stock (greater than 0, less than or equal to 10)
+    query = {
+        "projectedQty": {"$gt": 0, "$lte": 10}
+    }
+
+    # Optional search + territory filters
+    search_query = request.GET.get('search', '').strip()
+    territory_filter = request.GET.get('territory', '').strip()
+
+    if search_query:
+        query["itemCode"] = {"$regex": search_query, "$options": "i"}
+
+    if territory_filter:
+        query["territoryId"] = {"$regex": f"^{territory_filter}$", "$options": "i"}
+
+    print(f"Running Query: {query}")  # Very useful for debugging in Django console
+
+    # Fetch and prepare data
+    try:
+        data = list(collection.find(query).sort("lastUpdatedAt", -1))
+        for item in data:
+            item['_id'] = str(item['_id'])  # Convert ObjectId to string
+            item['lastUpdatedAt'] = item.get('lastUpdatedAt', '')[:10]
+    except Exception as e:
+        data = []
+        print(f"⚠️ MongoDB fetch error: {e}")
+
+    # Pagination
+    paginator = Paginator(data, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # Distinct territories for filter dropdown
+    try:
+        territories = sorted(collection.distinct("territoryId"))
+    except Exception:
+        territories = []
+
+    context = {
+        'products': page_obj,
+        'territories': territories,
+        'search_query': search_query,
+        'selected_territory': territory_filter,
+    }
+
+    return render(request, 'core/low_stock.html', context)
 
 def stock_update(request):
     return HttpResponse("Update stock")
@@ -906,8 +1247,41 @@ def generate_forecasts(request):
     return HttpResponse("Generate forecasts")
 
 # Order views
+from datetime import datetime
+
+@login_required
 def order_list(request):
-    return HttpResponse("Order list")
+    collection = db['salesOrders']
+
+    # Fetch relevant fields and sort
+    orders_raw = list(collection.find(
+        {},
+        {
+            '_id': 0,
+            'id': 1,
+            'name': 1,
+            'retailerName': 1,
+            'outletName': 1,
+            'totalAmount': 1,
+            'createdDate': 1
+        }
+    ).sort('createdDate', DESCENDING))
+
+    # Parse createdDate string into datetime
+    for order in orders_raw:
+        try:
+            order["created_date_fmt"] = datetime.fromisoformat(order["createdDate"][:19])
+        except Exception:
+            order["created_date_fmt"] = None
+
+    # Paginate
+    paginator = Paginator(orders_raw, 10)
+    page_number = request.GET.get('page')
+    orders = paginator.get_page(page_number)
+
+    return render(request, 'core/order_list.html', {
+        'orders': orders
+    })
 
 def order_create(request):
     return HttpResponse("Create order")

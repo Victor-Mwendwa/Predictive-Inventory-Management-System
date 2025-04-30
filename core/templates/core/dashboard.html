@@ -104,7 +104,7 @@
             </div>
             <div class="card-body p-0">
                 <div class="list-group list-group-flush">
-                    <a href="{% url 'product_list' %}?stock_status=out"
+                    <a href="{% url 'core:out_of_stock' %}?stock_status=out"
                        class="list-group-item list-group-item-action list-group-item-danger">
                         <div class="d-flex justify-content-between align-items-center">
                             <span>
@@ -114,7 +114,7 @@
                             <span class="badge bg-danger rounded-pill">{{ out_of_stock_count }}</span>
                         </div>
                     </a>
-                    <a href="{% url 'product_list' %}?stock_status=low"
+                    <a href="{% url 'core:low_stock' %}?stock_status=low"
                        class="list-group-item list-group-item-action list-group-item-warning">
                         <div class="d-flex justify-content-between align-items-center">
                             <span>
@@ -146,7 +146,7 @@
         <div class="card h-100">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Recent Orders</h5>
-                <a href="{% url 'order_list' %}" class="btn btn-sm btn-outline-primary">
+                <a href="{% url 'core:order_list' %}" class="btn btn-sm btn-outline-primary">
                     View All <i class="bi bi-arrow-right"></i>
                 </a>
             </div>
@@ -169,7 +169,14 @@
                                     #{{ order.id }}
                                 </td>
                                 <td>{{ order.retailerName|truncatechars:12 }}</td>
-                                <td>{{ order.createdDate|date:"M d" }}</td>
+                                <td>
+                                  {% if order.created_date_fmt %}
+                                      {{ order.created_date_fmt|date:"Y-m-d H:i" }}
+                                  {% else %}
+                                      <span class="text-muted">N/A</span>
+                                  {% endif %}
+                                </td>
+
                                 <td>KSh {{ order.totalAmount|floatformat:2 }}</td>
                                 <td>
                                     <span class="badge bg-info">Submitted</span>  {# Static badge, unless you later store status #}
@@ -202,38 +209,42 @@
             <div class="card-body p-0">
                 <div class="table-responsive">
                     <table class="table table-hover mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Product</th>
-                                <th>Category</th>
-                                <th>Units Sold</th>
-                                <th>Revenue</th>
-                                <th>Stock</th>
-                            </tr>
-                        </thead>
-                       <tbody>
-                            {% for product in top_products %}
-                            <tr>
-                                <td>
-                                    {{ product.product_name|truncatechars:20 }}
-                                </td>
-                                <td>-</td>  {# No category available in Mongo #}
-                                <td>{{ product.total_qty|default:0 }}</td>
-                                <td>KSh 0.00</td>  {# No revenue field unless you calculate it separately #}
-                                <td>
-                                    <span class="badge bg-secondary">Unknown</span> {# Stock info not available #}
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="5" class="text-center py-4 text-muted">
-                                    No sales data available
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
+    <thead class="table-light">
+        <tr>
+            <th>Product</th>
+            <th>Category</th>
+            <th>Currency</th>
+            <th>Units Sold</th>
+            <th>Revenue</th>
+            <th>Stock</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for product in top_products %}
+        <tr>
+    <td>{{ product.itemName|default:"-"|truncatechars:25 }}</td>
+    <td>{{ product.category|default:"-" }}</td>
+    <td>{{ product.currency }}</td>
+    <td>{{ product.total_qty }}</td>
+    <td>{{ product.total_revenue|floatformat:2 }}</td>
+    <td>
+        {% if product.stock == 0 %}
+            <span class="badge bg-danger">0</span>
+        {% elif product.stock|default:0 <= 10 %}
+            <span class="badge bg-warning text-dark">{{ product.stock }}</span>
+        {% else %}
+            <span class="badge bg-success">{{ product.stock }}</span>
+        {% endif %}
+    </td>
+</tr>
 
-                    </table>
+        {% empty %}
+        <tr>
+            <td colspan="6" class="text-center text-muted py-4">No sales data available.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
                 </div>
             </div>
         </div>
@@ -249,20 +260,12 @@
             </div>
             <div class="card-body">
                 <div class="d-flex flex-wrap gap-2">
-                    <a href="{% url 'core:order_create' %}" class="btn btn-primary">
-                        <i class="bi bi-cart-plus"></i> Create New Order
-                    </a>
-                    <a href="{% url 'core:product_create' %}" class="btn btn-outline-primary">
-                        <i class="bi bi-plus-circle"></i> Add Product
-                    </a>
-                    {% if user.is_staff %}
                     <a href="{% url 'generate_forecasts' %}" class="btn btn-info">
                         <i class="bi bi-graph-up"></i> Generate Forecasts
                     </a>
                     <a href="{% url 'core:inventory_report' %}" class="btn btn-outline-info">
                         <i class="bi bi-clipboard-data"></i> Inventory Report
                     </a>
-                    {% endif %}
                 </div>
             </div>
         </div>
@@ -274,60 +277,85 @@
 
 {% block extra_js %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const salesCtx = document.getElementById('salesChart').getContext('2d');
+document.addEventListener('DOMContentLoaded', function () {
+    try {
+        // Get the raw data from Django template
+        const salesTrendData = JSON.parse('{{ sales_trend_data|escapejs }}');
+        const labels = JSON.parse('{{ sales_trend_labels|escapejs }}');
+        const currencies = JSON.parse('{{ currencies|escapejs }}');
 
-    const labels = {{ sales_trend_labels|safe }};
-    const rawSalesData = {{ sales_trend_data|safe }};
-    const currencies = Object.keys(Object.values(rawSalesData)[0] || {});
+        console.log("Sales Trend Data:", salesTrendData);
+        console.log("Labels:", labels);
+        console.log("Currencies:", currencies);
 
-    const colors = ['red', 'blue', 'green', 'orange', 'purple', 'cyan'];
-    let datasets = [];
+        const colorMap = {
+            'KES': '#4e73df',
+            'NGN': '#1cc88a',
+            'TZS': '#36b9cc',
+            'UGX': '#f6c23e'
+        };
 
-    currencies.forEach((currency, idx) => {
-        let currencyData = labels.map(date => rawSalesData[date]?.[currency] || 0);
-        datasets.push({
-            label: `${currency} Sales`,
-            data: currencyData,
-            borderColor: colors[idx % colors.length],
-            backgroundColor: 'transparent',
-            tension: 0.3,
+        // Prepare datasets
+        const datasets = currencies.map(currency => {
+            return {
+                label: `${currency} Sales`,
+                data: labels.map(date => salesTrendData[date] ? salesTrendData[date][currency] || 0 : 0),
+                borderColor: colorMap[currency],
+                backgroundColor: colorMap[currency] + '40',
+                tension: 0.3,
+                fill: true
+            };
         });
-    });
 
-    const salesChart = new Chart(salesCtx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: datasets
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return context.dataset.label + ': ' + context.raw.toLocaleString();
+        // Create chart
+        const ctx = document.getElementById('salesChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            label: function(context) {
+                                return `${context.dataset.label}: ${context.raw.toLocaleString()}`;
+                            }
                         }
+                    },
+                    legend: {
+                        position: 'top',
                     }
                 },
-                legend: {
-                    display: true
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function(value) {
-                            return value.toLocaleString();
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return value.toLocaleString();
+                            }
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 45
                         }
                     }
                 }
             }
-        }
-    });
+        });
+    } catch (err) {
+        console.error("Chart error:", err);
+    }
 });
 </script>
 {% endblock %}

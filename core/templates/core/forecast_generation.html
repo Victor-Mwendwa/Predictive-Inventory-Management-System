@@ -1,0 +1,43 @@
+{% extends "core/base.html" %}
+{% block title %}Generate Forecasts{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2><i class="bi bi-graph-up-arrow"></i> Demand Forecast Generator</h2>
+    <p class="text-muted">Click the button below to start forecast generation. The process might take some few minutes .....</p>
+
+    <button id="run-forecast" class="btn btn-primary mb-3">
+        <i class="bi bi-play-circle"></i> Start Forecast
+    </button>
+
+    <div id="log-output" class="bg-dark text-white p-3 rounded" style="min-height: 200px; font-family: monospace;">
+        <em>Waiting to start...</em>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById("run-forecast").addEventListener("click", () => {
+    const logDiv = document.getElementById("log-output");
+    logDiv.innerHTML = "⏳ Starting forecast process...<br>";
+
+    fetch("{% url 'core:run_forecast_task' %}", {
+        method: "POST",
+        headers: {
+            "X-CSRFToken": "{{ csrf_token }}",
+            "Content-Type": "application/json",
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        data.log.forEach(step => {
+            logDiv.innerHTML += step + "<br>";
+        });
+    })
+    .catch(err => {
+        logDiv.innerHTML += `❌ Unexpected error: ${err}`;
+    });
+});
+</script>
+{% endblock %}

@@ -12,8 +12,6 @@ urlpatterns = [
     path('products/', views.product_list, name='product_list'),
     path('products/add/', views.product_create, name='product_create'),
     path('products/<int:pk>/', views.product_detail, name='product_detail'),
-    path('products/<int:pk>/edit/', views.product_update, name='product_update'),
-    path('products/<int:pk>/delete/', views.product_delete, name='product_delete'),
     
     # Inventory tracking
     path('stock/', views.stock_list, name='stock_list'),
@@ -24,7 +22,10 @@ urlpatterns = [
     # Demand forecasting
     path('forecasts/', views.forecast_list, name='forecast_list'),
     path('forecasts/generate/', views.generate_forecasts, name='generate_forecasts'),
-    
+    path("forecasts/results/", views.forecast_results_view, name="forecast_results"),
+    path('forecasts/produce/', views.forecast_ui_page, name='produce_forecasts'),
+    path('forecasts/run-task/', views.trigger_forecast_task, name='run_forecast_task'),
+
     # Reports
     path('forecast-report/', views.forecast_report, name='forecast_report'),
     path('reports/sales/', views.sales_report, name='sales_report'),
@@ -53,4 +54,7 @@ urlpatterns = [
 
     # Inventory report (duplicate corrected)
     path('inventory-report/', views.inventory_report, name='inventory_report'),
+
+    path('low-stock/submit-to-finance/', views.submit_to_finance, name='submit_to_finance'),
+
 ]
